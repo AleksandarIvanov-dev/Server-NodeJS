@@ -3,9 +3,7 @@ const axios = require('axios')
 const cors = require('cors');
 const mongoose = require('mongoose')
 const path = require('path');
-const ejs = require('ejs'); // delete
 const jwt = require('jsonwebtoken');
-const cookie = require('cookie'); // delete
 const cookieParser = require('cookie-parser');
 const bcrypt = require('bcrypt');
 
