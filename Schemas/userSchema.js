@@ -18,21 +18,72 @@ const userSchema = new mongoose.Schema({
         type: String,
         required: true,
     },
+    role: {
+        type: String,
+        enum: ['student', 'teacher', 'admin'],
+        default: 'student'
+    },
     languages: {
         type: [String],
     },
-    progress: {
+    namesOfSolvedQuiz: {
         type: Map,
-        of: [String],
+        of: [
+            new mongoose.Schema({
+                quizName: String,
+                submittedAt: {
+                    type: Date,
+                    default: Date.now
+                }
+            },)
+        ],
         default: {}
     },
     solvedChallenges: [
         {
             challengeId: { type: mongoose.Schema.Types.ObjectId, ref: "Challenge" },
+            status: { type: String, enum: ["not started", "started", "completed"], default: "not started" },
             solvedAt: { type: Date, default: Date.now },
-            code: String, // optional: store the code that passed
+            code: String,
         }
-    ]
+    ],
+    solvedExams: [
+        {
+            examId: { type: mongoose.Schema.Types.ObjectId, ref: "usersexamresults" },
+            grade: Number,
+            totalQuestions: Number,
+            questions: [
+                {
+                    type: String
+                }
+            ],
+            correctCount: Number,
+            allAnswers: [
+                {
+                    questionId: String,
+                    answer: [String]
+                }
+            ],
+            submittedAt: { type: Date, default: Date.now }
+        }
+    ],
+    progressTutorial: [
+        {
+            language: { type: String, required: true },
+            tutorials: [
+                {
+                    tutorialName: { type: String, required: true },
+                    startedAt: { type: Date },
+                    endedAt: { type: Date }
+                }
+            ]
+        }
+    ],
+    progressLevel: {
+        type: String,
+        enum: ['beginner', 'intermediate', 'advanced'],
+        default: 'beginner'
+    }
 });
 
 const User = mongoose.model("users", userSchema);

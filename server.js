@@ -6,12 +6,15 @@ const path = require('path');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 const bcrypt = require('bcrypt');
+const validator = require('validator');
+
 
 // Schemas
 const UserExamResults = require('./Schemas/userExamResults');
 const Tutorial = require('./Schemas/tutorialSchema')
 const User = require('./Schemas/userSchema');
 const Challenge = require('./Schemas/challengeSchema');
+const Exam = require('./Schemas/examSchema')
 
 
 // Initialize the Express application
@@ -23,11 +26,7 @@ app.use(cors({
     credentials: true
 }));
 app.use(express.json());
-
-// Set up EJS as the view engine
-// This allows us to render EJS templates for HTML files
-app.set("view engine", "ejs");
-app.set("views", path.join(__dirname, "HTML_Files"));
+app.use("/Images", express.static(path.join(__dirname, "Images")));
 
 const port = 5000;
 const jwtSecretKey = "SECRET_KEY";
@@ -63,7 +62,6 @@ app.post("/executeCode", async (req, res) => {
 
     const { clientId, clientSecret, script, stdin, language, versionIndex, compileOnly } = req.body;
 
-    // Validate the request body
     if (!clientId || !clientSecret || !script || !language || !versionIndex) {
         return res.status(400).json({ error: "Invalid request data. Please provide all required fields." });
     }
@@ -79,7 +77,6 @@ app.post("/executeCode", async (req, res) => {
     };
 
     try {
-
         const response = await axios.post(postURL, jsonObject, {
             headers: {
                 "Content-Type": "application/json"
@@ -95,13 +92,21 @@ app.post("/executeCode", async (req, res) => {
 const saltRounds = 10;
 // Endpoint to save user data
 app.post("/createNewUser", async (req, res) => {
-    const { firstName, lastName, email, password } = req.body;
+    const { firstName, lastName, email, password, role } = req.body;
+    const isStudent = role === "student";
+
     // Validate the user data
     if (!firstName || !lastName || !email || password === undefined || password === null) {
         return res.status(400).json({ error: "Invalid user data" });
     }
 
     try {
+
+        let sanitizedEmail = "";
+        if (validator.isEmail(email)) {
+            sanitizedEmail = validator.normalizeEmail(email);
+        }
+
         // Check if a user with the given email already exists
         const existingUser = await User.findOne({ email });
         if (existingUser) {
@@ -109,15 +114,15 @@ app.post("/createNewUser", async (req, res) => {
         }
 
         const hash = await bcrypt.hash(password, saltRounds);
-        const newUser = new User({ firstName, lastName, email, password: hash });
+        const newUser = new User({ firstName, lastName, email: sanitizedEmail, password: hash, role, progressLevel: "beginner" });
         await newUser.save();
 
-        // Immediately log in the user after successful signup
-        const token = jwt.sign({ id: newUser._id, email: newUser.email }, jwtSecretKey, {
+        const token = jwt.sign({ id: newUser._id, email: newUser.email, role: newUser.role }, jwtSecretKey, {
             expiresIn: '1h',
         });
 
         res.cookie('token', token, { httpOnly: true, }).status(200);
+
         res.redirect("http://localhost:3000/home/lang")
     } catch (error) {
         console.error("Error saving user:", error);
@@ -129,11 +134,16 @@ app.post("/createNewUser", async (req, res) => {
 app.post("/logIn", async (req, res) => {
     const { email, password } = req.body;
 
+    let sanitizedEmail = "";
+    if (validator.isEmail(email)) {
+        sanitizedEmail = validator.normalizeEmail(email);
+    }
+
     if (!email || !password) {
         return res.status(400).json({ error: "Email and password are required" });
     }
     try {
-        const userData = await User.findOne({ email });
+        const userData = await User.findOne({ email: sanitizedEmail });
 
         if (!userData) {
             return res.status(404).json({ error: "Invalid email or password" });
@@ -157,7 +167,7 @@ app.post("/logIn", async (req, res) => {
                 message: "Login successful",
                 user: {
                     email: userData.email,
-                    languages: userData.languages || [], // assuming you have `languages` in user schema
+                    languages: userData.languages,
                     id: userData._id
                 }
             });
@@ -172,8 +182,8 @@ app.post("/logIn", async (req, res) => {
 app.put("/updateLanguage", withAuth, async (req, res) => {
     const { languages } = req.body;
 
-    if (!languages || !Array.isArray(languages)) {
-        return res.status(400).json({ error: "Languages must be an array" });
+    if (!languages) {
+        return res.status(400).json({ error: "You must choose a programming language!" });
     }
 
     try {
@@ -194,61 +204,247 @@ app.put("/updateLanguage", withAuth, async (req, res) => {
     }
 });
 
-// Endpoint to authenticate JWT Token
-app.get("/auth/user", async (req, res) => {
-    const token = req.cookies.token;
-    if (!token) {
-        return res.status(401).json({ error: "Unauthorized" });
+app.put("/updateuser", withAuth, async (req, res) => {
+    const { firstName, lastName, email, password } = req.body;
+
+    // Create an object to hold only the fields we intend to update
+    const updateFields = {};
+
+    // --- Conditionally validate and add fields to the update object ---
+
+    // Validate and add firstName if it was provided
+    if (firstName) {
+        // A more flexible validation for names (allows letters, hyphens, apostrophes)
+        if (validator.matches(firstName, /^[a-zA-Z'-]+$/)) {
+            updateFields.firstName = firstName;
+        } else {
+            return res.status(400).json({ error: "Invalid first name format." });
+        }
+    }
+
+    // Validate and add lastName if it was provided
+    if (lastName) {
+        if (validator.matches(lastName, /^[a-zA-Z'-]+$/)) {
+            updateFields.lastName = lastName;
+        } else {
+            return res.status(400).json({ error: "Invalid last name format." });
+        }
+    }
+
+    // Validate and add email if it was provided
+    if (email) {
+        if (validator.isEmail(email)) {
+            updateFields.email = validator.normalizeEmail(email);
+        } else {
+            return res.status(400).json({ error: "Invalid email format." });
+        }
+    }
+
+    // Hash and add the password only if a new one was provided
+    if (password) {
+        if (password.length < 8) { // Example: add a password length check
+            return res.status(400).json({ error: "Password must be at least 8 characters long." });
+        }
+        updateFields.password = await bcrypt.hash(password, 10);
+    }
+
+    // Check if there are any valid fields to update
+    if (Object.keys(updateFields).length === 0) {
+        return res.status(400).json({ error: "No valid fields provided for update." });
     }
 
     try {
-        const decoded = jwt.verify(token, "SECRET_KEY");
-        const foundUser = await User.findById(decoded.id);
-        res.status(200).json({ foundUser });
-    } catch (err) {
-        return res.status(403).json({ error: "Invalid token" });
+        const user = await User.findOneAndUpdate(
+            { _id: req.user.id }, // Find the user by their ID from the auth token
+            { $set: updateFields }, // Use the dynamically built object with $set
+            { new: true, runValidators: true } // Return the updated document and run schema validators
+        );
+
+        if (!user) {
+            return res.status(404).json({ error: "User not found!" });
+        }
+
+        // Send a clean response without the password
+        res.status(200).json({
+            message: "User updated successfully",
+            user: {
+                id: user._id,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                email: user.email
+            }
+        });
+
+    } catch (error) {
+        // Handle potential database errors (e.g., unique email constraint violation)
+        console.error("Error updating user:", error);
+        res.status(500).json({ error: "Failed to update user. The email might already be in use." });
     }
 });
 
 // Endpoint to receive exam results and save them to the database
 app.post("/exam/results", withAuth, async (req, res) => {
-
-    const { language, answers, correctCount, totalQuestions } = req.body;
+    const { examId, answers, language, questions, correctCount, totalQuestion } = req.body;
     const userID = req.user.id;
+    const userEmail = req.user.email;
 
     if (!userID) {
         return res.status(401).json({ error: "Unauthorized" });
     }
 
-    // Validate the request body
-    if (!language || !answers || correctCount === undefined || totalQuestions === undefined) {
+    if (!examId || !language || !answers || correctCount === undefined || totalQuestion === undefined) {
         return res.status(400).json({ error: "Invalid request data. Please provide all required fields." });
     }
 
-    const grade = Math.round((correctCount / totalQuestions) * 5) + 1;
     try {
+        const user = await User.findOne({ email: userEmail });
+        if (!user) {
+            return res.status(404).json({ error: "User not found" });
+        }
+
+        const exam = await Exam.findById(examId);
+        if (!exam) {
+            return res.status(404).json({ error: "Exam not found" });
+        }
+
+        const grade = Math.round((correctCount / totalQuestion) * 4) + 2;
+
+        // Save user exam result with examId
         const result = new UserExamResults({
             userId: userID,
+            examId,          // Save examId here
             language,
             answers,
             correctCount,
-            totalQuestions,
+            totalQuestion,
             completedAt: new Date(),
             isCompleted: grade >= 3,
         });
         await result.save();
 
+        // Save summary in user's solvedExams
+        user.solvedExams.push({
+            examId,          // Link real exam id here
+            grade,
+            totalQuestions: totalQuestion,
+            questions,       // optional, you might want to remove to save space if you have examId
+            correctCount,
+            allAnswers: Object.entries(answers).map(([questionId, answer]) => ({
+                questionId,
+                answer
+            })),
+            submittedAt: new Date()
+        });
+
+        user.progressTutorial = user.progressTutorial.filter(item => item.language);
+        await user.save();
+
+        // Build response: questions with correct answers + user's answers
+        // Map exam questions with user's answers
+        const questionsWithUserAnswers = exam.questions.map(q => ({
+            questionId: q._id.toString(),
+            questionText: q.questionText,
+            options: q.options,
+            correctAnswers: q.correctAnswers,
+            userAnswer: answers[q._id.toString()] || null
+        }));
+
         return res.status(200).json({
             message: "Exam result saved successfully",
             grade: `${grade}`,
             correctCount,
-            totalQuestions
+            totalQuestion,
+            questions: questionsWithUserAnswers
         });
+
     } catch (error) {
         console.error("Error saving exam result:", error);
         return res.status(500).json({ error: "Failed to save exam result" });
     }
-})
+});
+
+// Endpoint to get answers for a specific exam by ID
+app.get("/exam/answers/:examId", withAuth, async (req, res) => {
+    const examId = req.params.examId;
+    const userEmail = req.user.email;
+
+    try {
+        const user = await User.findOne({ email: userEmail }).populate({
+            path: "solvedExams.examId",
+            model: "Exam",
+        });
+
+        if (!user) {
+            return res.status(404).json({ error: "User not found" });
+        }
+
+        const solvedExam = user.solvedExams.find(se =>
+            se.examId && se.examId._id.toString() === examId
+        );
+        if (!solvedExam) {
+            return res.status(404).json({ error: "Solved exam not found for user" });
+        }
+
+        const exam = solvedExam.examId;
+
+        if (!exam || !Array.isArray(exam.questions)) {
+            return res.status(500).json({ error: "Exam data is incomplete" });
+        }
+
+        // Build user answers map
+        const userAnswersMap = {};
+        if (Array.isArray(solvedExam.allAnswers)) {
+            solvedExam.allAnswers.forEach(({ questionId, answer }) => {
+                if (questionId) {
+                    userAnswersMap[questionId.toString()] = answer;
+                }
+            });
+        }
+
+        let correctCount = 0;
+        const questionsWithUserAnswers = exam.questions.map((q) => {
+            const userAnswer = userAnswersMap[q._id.toString()] || null;
+            const isCorrect =
+                Array.isArray(userAnswer) &&
+                Array.isArray(q.correctAnswers) &&
+                userAnswer.length === q.correctAnswers.length &&
+                userAnswer.every(ans => q.correctAnswers.includes(ans));
+
+            if (isCorrect) correctCount++;
+
+            return {
+                questionId: q._id.toString(),
+                questionText: q.questionText,
+                options: q.options,
+                correctAnswers: q.correctAnswers,
+                userAnswer,
+                isCorrect
+            };
+        });
+
+        const totalQuestions = exam.questions.length;
+        const wrongCount = totalQuestions - correctCount;
+        const grade = ((correctCount / totalQuestions) * 4) + 2;
+
+        return res.json({
+            examId: exam._id,
+            language: exam.language,
+            difficulty: exam.difficulty,
+            time: exam.time,
+            createdAt: exam.createdAt,
+            solvedAt: solvedExam.submittedAt,
+            totalQuestions,
+            correctCount,
+            wrongCount,
+            grade,
+            questions: questionsWithUserAnswers
+        });
+
+    } catch (error) {
+        console.error("Error fetching exam answers:", error);
+        return res.status(500).json({ error: "Failed to fetch exam answers" });
+    }
+});
 
 // Endpoint to get user data from DB
 app.get("/getuserprofile", withAuth, async (req, res) => {
@@ -267,6 +463,40 @@ app.get("/getuserprofile", withAuth, async (req, res) => {
     }
 });
 
+app.get("/getuserinfo", withAuth, async (req, res) => {
+    try {
+        const userEmail = req.user.email;
+        const userData = await User.findOne({ email: userEmail }).lean();
+
+        if (!userData) {
+            return res.status(404).json({ error: "User not found" });
+        }
+
+        const allChallengesByLanguage = await Challenge.find({
+            languageForDisplay: { $in: userData.languages }
+        });
+
+        const solvedChallengeIds = userData.solvedChallenges.map(item => item.challengeId);
+        const challenges = await Challenge.find({ _id: { $in: solvedChallengeIds } }).lean();
+
+        const solvedExamIds = userData.solvedExams.map(item => item.examId);
+        const exams = await UserExamResults.find({ _id: { $in: solvedExamIds } }).lean();
+
+        const quizNames = Object.values(userData.namesOfSolvedQuiz || {}).flat();
+
+        res.json({
+            userData,
+            allChallengesByLanguage,
+            challenges,
+            exams,
+            quizNames
+        });
+    } catch (error) {
+        console.error("Error fetching user info:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
+
 // Route to check if the router has a valid token
 app.get("/checkToken", withAuth, (req, res) => {
     res.sendStatus(200);
@@ -278,59 +508,97 @@ app.post("/logout", (req, res) => {
     res.sendStatus(200);
 })
 
-// Route to load all tutorials from DB
-app.get("/alltutorials", withAuth, async (req, res) => {
-    const userId = req.user.id;
-    const selectedLang = req.query.lang;
-
+// Endpoint to get tutorials based on user's language
+app.post("/get-tutorial", withAuth, async (req, res) => {
+    const userEmail = req.user.email;
     try {
-        const filter = selectedLang ? { language: selectedLang } : {};
+        const user = await User.findOne({ email: userEmail });
+        if (!user) {
+            return res.status(400).json({ error: "User not found." });
+        }
 
-        const tutorials = await Tutorial.find(filter);
-        const progress = await UserExamResults.find({ userId });
+        const tutorials = await Tutorial.find({
+            language: { $in: user.languages }
+        }).sort({ title: 1 }).limit(3);
 
-        const completedTutorialIds = progress.map(p => p.tutorialId?.toString());
-
-        const result = tutorials.map(tutorial => ({
-            ...tutorial.toObject(),
-            completed: completedTutorialIds.includes(tutorial._id.toString())
-        }));
-
-        res.json(result);
-    } catch (err) {
-        console.error("Error fetching tutorials:", err);
-        res.status(500).json({ error: "Failed to fetch tutorials" });
+        res.status(200).json(tutorials);
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ error: "Server error." });
     }
 });
 
 // Endpoint to save user's progress in a tutorial
-app.post("/save-progress", withAuth, async (req, res) => {
-    const { language, tutorialId } = req.body;
+app.post("/start-tutorial", withAuth, async (req, res) => {
+    const { tutorialName, tutorialLanguage } = req.body;
     const userEmail = req.user.email;
 
     const user = await User.findOne({ email: userEmail });
-
     if (!user) {
         return res.status(404).json({ error: "User not found" });
     }
 
-    // Initialize language progress if not existing
-    if (!user.progress.has(language)) {
-        user.progress.set(language, []);
+    let langEntry = user.progressTutorial.find(entry => entry.language === tutorialLanguage);
+
+    if (!langEntry) {
+        langEntry = {
+            language: tutorialLanguage,
+            tutorials: []
+        };
+        user.progressTutorial.push(langEntry);
     }
 
-    const lessons = user.progress.get(language);
+    const alreadyStarted = langEntry.tutorials.find(t => t.tutorialName === tutorialName);
 
-    // Add only if tutorialId not already present
-    if (!lessons.includes(tutorialId)) {
-        lessons.push(tutorialId);
-        user.progress.set(language, lessons);
+    if (!alreadyStarted) {
+        langEntry.tutorials.push({
+            tutorialName,
+            startedAt: new Date(),
+            endedAt: null
+        });
+        await user.save();
     }
 
-    await user.save();
-    res.status(200).json({ message: "Progress saved" });
-})
+    res.status(200).json({ message: "Tutorial started" });
+});
 
+app.post("/end-tutorial", withAuth, async (req, res) => {
+    try {
+        const { tutorialName, tutorialLanguage } = req.body;
+        const userEmail = req.user.email;
+
+        const user = await User.findOne({ email: userEmail });
+        if (!user) {
+            return res.status(404).json({ error: "User not found" });
+        }
+
+        if (!Array.isArray(user.progressTutorial)) {
+            return res.status(400).json({ error: "No progress found" });
+        }
+
+        const langEntry = user.progressTutorial.find(entry => entry.language === tutorialLanguage);
+        if (!langEntry) {
+            return res.status(400).json({ error: "No progress for this language" });
+        }
+
+        const tutorialProgress = langEntry.tutorials.find(t => t.tutorialName === tutorialName);
+        if (!tutorialProgress) {
+            return res.status(400).json({ error: "Tutorial not started" });
+        }
+
+        if (!tutorialProgress.endedAt) {
+            tutorialProgress.endedAt = new Date();
+            await user.save();
+            return res.status(200).json({ message: "Tutorial ended" });
+        } else {
+            return res.status(200).json({ message: "Tutorial already ended" });
+        }
+
+    } catch (error) {
+        console.error("Error in end-tutorial:", error);
+        res.status(500).json({ error: "Server error" });
+    }
+});
 // Endpoint to execute user's code from coding challenges
 app.post("/execute-code", withAuth, async (req, res) => {
     const { challengeId, code, language, versionIndex } = req.body;
@@ -343,10 +611,15 @@ app.post("/execute-code", withAuth, async (req, res) => {
         return res.status(404).json({ error: "User not found!" });
     }
 
-    const allPassed = await runAllTestCases(challenge.testCases, code, language, versionIndex);
+    if (!challenge) {
+        return res.status(404).json({ error: "Challenge not found!" });
+    }
+
+    const testResults = await runAllTestCases(challenge.testCases, code, language, versionIndex);
+
+    const allPassed = testResults.every(r => r.passed);
 
     if (allPassed) {
-        // If all test cases passed, save the challenge as solved
         const alreadySolved = user.solvedChallenges.some(
             (item) => item.challengeId.toString() === challengeId
         );
@@ -355,12 +628,104 @@ app.post("/execute-code", withAuth, async (req, res) => {
             user.solvedChallenges.push({ challengeId, code });
             await user.save();
         }
-
-        return res.status(200).json({ success: true, message: "All tests passed!" });
-    } else {
-        return res.status(200).json({ success: false, message: "Some tests failed." });
     }
+
+    return res.status(200).json({
+        success: allPassed,
+        testResults,
+        message: allPassed ? "All tests passed!" : "Some tests failed."
+    });
+});
+
+// Endpoint to track when the user started the challenge
+app.post("/start-challenge", withAuth, async (req, res) => {
+    const { challengeId } = req.body;
+    const user = await User.findOne({ email: req.user.email });
+
+    const exists = user.solvedChallenges.find(p => p.challengeId.toString() === challengeId);
+
+    if (!exists) {
+        user.solvedChallenges.push({
+            challengeId,
+            status: "started",
+            startedAt: new Date()
+        });
+        await user.save();
+    }
+
+    res.json({ success: true });
+});
+
+// Endpoint to track when the user finished the challenge
+app.post("/end-challenge", withAuth, async (req, res) => {
+    const { challengeId, code } = req.body;
+    const user = await User.findOne({ email: req.user.email });
+
+    const challenge = await Challenge.findById(challengeId);
+
+    const progress = user.solvedChallenges.find(
+        (p) => p.challengeId === challengeId
+    );
+
+
+    if (progress) {
+        progress.status = "completed";
+        progress.completedAt = new Date();
+        progress.code = code;
+        progress.difficulty = challenge.difficulty;
+    } else {
+        user.solvedChallenges.push({
+            challengeId,
+            difficulty: challenge.difficulty,
+            status: "completed",
+            solvedAt: new Date(),
+            code: code
+        });
+    }
+
+    user.progressLevel = calculateUserProgressLevel(user.solvedChallenges);
+
+    await user.save();
+    res.json({ success: true });
 })
+
+// Endpoint to save user's completed Quiz
+app.post("/quiz-complete", withAuth, async (req, res) => {
+    const { quizName, language } = req.body;
+    const userEmail = req.user.email;
+
+    try {
+        const user = await User.findOne({ email: userEmail });
+
+        if (!user) {
+            return res.status(404).json({ error: "User not found" });
+        }
+
+        // Вземи вече решените тестове по език
+        const quizzes = user.namesOfSolvedQuiz.get(language) || [];
+
+        // Провери дали вече е решен този quiz
+        const alreadySolved = quizzes.some(q => q.quizName === quizName);
+
+        if (!alreadySolved) {
+            quizzes.push({
+                quizName,
+                submittedAt: new Date()
+            });
+
+            // Обнови map-a с новата стойност
+            user.namesOfSolvedQuiz.set(language, quizzes);
+
+            await user.save();
+        }
+
+        res.status(200).json({ message: "Quiz progress saved" });
+
+    } catch (error) {
+        console.error("Error saving quiz:", error);
+        res.status(500).json({ error: "Server error" });
+    }
+});
 
 // Endpoint to get all challenges based on user's preferred languages
 app.get('/challenges', withAuth, async (req, res) => {
@@ -372,7 +737,18 @@ app.get('/challenges', withAuth, async (req, res) => {
             return res.status(400).json({ error: "User or preferred languages not found." });
         }
 
-        const challenges = await Challenge.find({ languageForDisplay: { $in: user.languages } });
+        if (user.progressLevel === "beginner") {
+            user.progressLevel = "easy"
+        } else if (user.progressLevel === "intermediate") {
+            user.progressLevel = "medium"
+        } else {
+            user.progressLevel = "hard"
+        }
+
+        const challenges = await Challenge.find({
+            languageForDisplay: { $in: user.languages },
+            difficulty: user.progressLevel
+        });
 
         res.json(challenges);
     } catch (err) {
@@ -394,45 +770,154 @@ app.get('/challenge/:id', withAuth, async (req, res) => {
     }
 });
 
-// Function to run all test cases for a given challenge
-async function runAllTestCases(testCases, code, language, indexVersion) {
-    const postURL = "https://api.jdoodle.com/v1/execute";
-    const clientId = "740b7e52c332bbbce02cdf69cb87461d";
-    const clientSecret = "3b2d3849be5207c8e9354bb38d51100b12867d1f9a94d3e5540b7b821cc91b43";
+// Endpoint to get all exam's based on user's languages
+app.get('/get-exams', withAuth, async (req, res) => {
+    const userEmail = req.user.email;
+    try {
+        const user = await User.findOne({ email: userEmail })
+
+        if (!user) {
+            return res.status(404).json({ error: "User not found" });
+        }
+
+        const examsByUserLanguage = await Exam.find({ language: { $in: user.languages } })
+
+        res.json(examsByUserLanguage);
+    } catch (error) {
+        console.error("Error fetching user info:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+})
+
+// Endpoint to save created exam-questions to DB
+app.post("/add-exam", withAuth, async (req, res) => {
+    const { language, questions, difficulty, examTime } = req.body;
+    const isAuthorized = req.user.role;
+
+    //console.log(difficulty)
+
+    if (isAuthorized === "student") {
+        return res.status(403).json({ message: "You are not authorized!" });
+    }
+
+    try {
+        const newExam = new Exam({
+            language,
+            difficulty,
+            questions,
+            time: examTime
+        });
+
+        await newExam.save();
+
+        res.status(200).json({ message: "Questions added successfully." });
+
+    } catch (error) {
+        console.error("Error adding exam questions:", error);
+        res.status(500).json({ message: "Server error" });
+    }
+});
+
+app.get("/get-exam/:language", withAuth, async (req, res) => {
+    const lang = req.params.language;
+
+    const exams = await Exam.find({ language: lang });
+    // Exam.find() returns an array; if no matches, it returns an empty array [] which is truthy.
+    if (!exams || exams.length === 0) {
+        return res.status(404).json({ message: "No exam with the provided language exists!" });
+    }
+
+    // One exam per language
+    const exam = exams[0];
+
+    res.json(exam);
+});
+
+app.post("/get-tutorials", withAuth, async (req, res) => {
+    const userEmail = req.user.email;
+    try {
+        const user = await User.findOne({ email: userEmail });
+        if (!user) {
+            return res.status(400).json({ error: "User not found." });
+        }
+
+        const tutorials = await Tutorial.find({
+            language: { $in: user.languages }
+        }).sort({ title: 1 });
+
+        res.status(200).json(tutorials);
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ error: "Server error." });
+    }
+});
+// Function to calculate user's progress level
+function calculateUserProgressLevel(solvedChallenges) {
+    let easy = 0, medium = 0, hard = 0;
+
+    solvedChallenges.forEach((challenge) => {
+        if (challenge.status === 'completed') {
+            if (challenge.difficulty === 'easy') easy++;
+            else if (challenge.difficulty === 'medium') medium++;
+            else if (challenge.difficulty === 'hard') hard++;
+        }
+    });
+
+    const total = easy + medium + hard;
+
+    if (total < 5 || (easy >= total * 0.8)) {
+        return 'beginner';
+    } else if (medium >= total * 0.4 || hard >= 1) {
+        return 'intermediate';
+    } else if (hard >= total * 0.5 || total >= 15) {
+        return 'advanced';
+    }
+
+    return 'beginner';
+}
+
+// Function to run all test cases for a given code snippet
+const runAllTestCases = async (testCases, code, language, versionIndex) => {
+    const results = [];
 
     for (const testCase of testCases) {
-        const payload = {
-            clientId,
-            clientSecret,
-            script: code,
-            stdin: testCase.input,
-            language,
-            versionIndex: indexVersion,
-            compileOnly: false
-        }
-
         try {
-            const response = await axios.post(postURL, payload, {
-                method: 'POST',
-                headers: {
-                    "Content-Type": "application.json"
-                },
-                body: JSON.stringify(payload)
-            })
+            const res = await fetch("https://api.jdoodle.com/v1/execute", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    clientId: "740b7e52c332bbbce02cdf69cb87461d",
+                    clientSecret: "3b2d3849be5207c8e9354bb38d51100b12867d1f9a94d3e5540b7b821cc91b43",
+                    script: code,
+                    language: language,
+                    versionIndex: versionIndex,
+                    stdin: testCase.input,
+                }),
+            });
 
-            const output = response.data.output.trim();
-            const expectedOutput = testCase.expectedOutput.trim();
+            const data = await res.json();
 
-            if (output !== expectedOutput) {
-                return false; // if any of the test cases fail return false
-            }
-        } catch (error) {
-            console.error("Execution error: ", error?.response?.data || error);
-            return false; // if there's an error in execution
+            //console.log(data)
+
+            results.push({
+                input: testCase.input,
+                expected: testCase.expectedOutput,
+                output: data.output?.trim() || "No output",
+                passed: data.output?.trim() === testCase.expectedOutput.trim(),
+            });
+
+        } catch (err) {
+            results.push({
+                input: testCase.input,
+                expected: testCase.expectedOutput,
+                output: `Error: ${err.message}`,
+                passed: false,
+            });
         }
     }
-    return true; // if all test cases passed
-}
+
+    return results;
+};
 
 // Function to connect to MongoDB
 async function connectToDB() {

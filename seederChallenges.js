@@ -6,10 +6,11 @@ const challenges = [
         title: "Сумирай две числа",
         description: "Напишете програма, която въвежда две цели числа и извежда тяхната сума.",
         starterCode: `# Вашият код тук`,
-        language: "python",
+        language: "python3",
         languageForDisplay: "Python",
         sampleInput: "2\n3",
         sampleOutput: "5",
+        difficulty: "easy", //easy, medium, hard
         testCases: [
             { input: "2\n3", expectedOutput: "5" },
             { input: "10\n-4", expectedOutput: "6" }
@@ -19,13 +20,34 @@ const challenges = [
         title: "Проверка за четно число",
         description: "Напишете програма, която проверява дали дадено цяло число е четно.",
         starterCode: `# Вашият код тук`,
-        language: "python",
+        language: "python3",
         languageForDisplay: "Python",
         sampleInput: "10",
         sampleOutput: "true",
+        difficulty: "easy",
         testCases: [
             { input: "2", expectedOutput: "true" },
             { inputL: "3", expectedOutput: "false" }
+        ]
+    },
+    {
+        title: "Пирамида от звезди",
+        description: "Напишете програма, която принтира пирамида от звездички с дадена височина.",
+        starterCode: "# Вашият код тук",
+        language: "python3",
+        languageForDisplay: "Python",
+        sampleInput: "4",
+        sampleOutput: "   *\n  ***\n *****\n*******",
+        difficulty: "easy",
+        testCases: [
+            {
+                input: "3",
+                expectedOutput: "  *\n ***\n*****"
+            },
+            {
+                input: "5",
+                expectedOutput: "    *\n   ***\n  *****\n *******\n*********"
+            }
         ]
     },
     {
@@ -36,6 +58,7 @@ const challenges = [
         languageForDisplay: "Java",
         sampleInput: "hello",
         sampleOutput: "olleh",
+        difficulty: "easy",
         testCases: [
             { input: "hello", expectedOutput: "olleh" },
             { input: "Java", expectedOutput: "avaJ" }
@@ -49,19 +72,41 @@ const challenges = [
         languageForDisplay: "Java",
         sampleInput: "1\n2\n3",
         sampleOutput: "3",
+        difficulty: "easy",
         testCases: [
             { input: "1\n2\n3", expectedOutput: "3" },
             { input: "5\n5\n4", expectedOutput: "5" }
         ]
     },
     {
+        title: "Числов триъгълник",
+        description: "Напишете програма, която принтира триъгълник от числа, започвайки от 1.",
+        starterCode: "# Вашият код тук",
+        language: "java",
+        languageForDisplay: "Java",
+        sampleInput: "4",
+        sampleOutput: "1\n12\n123\n1234",
+        difficulty: "easy",
+        testCases: [
+            {
+                "input": "3",
+                "expectedOutput": "1\n12\n123"
+            },
+            {
+                "input": "5",
+                "expectedOutput": "1\n12\n123\n1234\n12345"
+            }
+        ]
+    },
+    {
         title: "Провери дали числото е четно",
         description: "Въведете цяло число и отпечатайте 'Even', ако е четно, или 'Odd', ако е нечетно.",
-        starterCode: `// Вашият код тук\n});`,
-        language: "",
+        starterCode: `// Вашият код тук\n`,
+        language: "nodejs",
         languageForDisplay: "JavaScript",
         sampleInput: "4",
         sampleOutput: "Even",
+        difficulty: "easy",
         testCases: [
             { input: "4", expectedOutput: "Even" },
             { input: "7", expectedOutput: "Odd" }
@@ -70,11 +115,12 @@ const challenges = [
     {
         title: "Събиране на две числа",
         description: "Въведете две цели числа и отпечатайте тяхната сума.",
-        starterCode: `// Вашият код тук\n});`,
-        language: "",
+        starterCode: `// Вашият код тук\n`,
+        language: "nodejs",
         languageForDisplay: "JavaScript",
         sampleInput: "4\n2",
         sampleOutput: "6",
+        difficulty: "easy",
         testCases: [
             { input: "4\n2", expectedOutput: "6" },
             { input: "10\n-5", expectedOutput: "5" }
@@ -88,6 +134,7 @@ const challenges = [
         languageForDisplay: "C++",
         sampleInput: "4 7",
         sampleOutput: "7",
+        difficulty: "easy",
         testCases: [
             { input: "4 7", expectedOutput: "7" },
             { input: "9 2", expectedOutput: "9" }
@@ -101,6 +148,7 @@ const challenges = [
         languageForDisplay: "C++",
         sampleInput: "123",
         sampleOutput: "3",
+        difficulty: "easy",
         testCases: [
             { input: "123", expectedOutput: "3" },
             { input: "5", expectedOutput: "1" },
@@ -115,6 +163,7 @@ const challenges = [
         languageForDisplay: "C#",
         sampleInput: "123",
         sampleOutput: "3",
+        difficulty: "easy",
         testCases: [
             { input: "123", expectedOutput: "3" },
             { input: "5", expectedOutput: "1" },
@@ -129,6 +178,7 @@ const challenges = [
         languageForDisplay: "C#",
         sampleInput: "4 7",
         sampleOutput: "7",
+        difficulty: "easy",
         testCases: [
             { input: "4 7", expectedOutput: "7" },
             { input: "9 2", expectedOutput: "9" }

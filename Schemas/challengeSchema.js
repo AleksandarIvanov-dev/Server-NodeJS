@@ -12,6 +12,16 @@ const challengeSchema = new mongoose.Schema({
             expectedOutput: String
         }
     ],
+    status: {
+        type: String,
+        enum: ["not started", "started", "completed"],
+        default: "not started"
+    },
+    difficulty: {
+        type: String,
+        enum: ["easy", "medium", "hard"],
+        default: "easy"
+    },
     sampleInput: String,
     sampleOutput: String
 });
