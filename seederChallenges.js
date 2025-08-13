@@ -72,7 +72,7 @@ const challenges = [
         languageForDisplay: "Java",
         sampleInput: "1\n2\n3",
         sampleOutput: "3",
-        difficulty: "easy",
+        difficulty: "medium",
         testCases: [
             { input: "1\n2\n3", expectedOutput: "3" },
             { input: "5\n5\n4", expectedOutput: "5" }

@@ -630,6 +630,8 @@ app.post("/execute-code", withAuth, async (req, res) => {
         }
     }
 
+    //console.log(allPassed, testResults)
+
     return res.status(200).json({
         success: allPassed,
         testResults,
@@ -664,7 +666,7 @@ app.post("/end-challenge", withAuth, async (req, res) => {
     const challenge = await Challenge.findById(challengeId);
 
     const progress = user.solvedChallenges.find(
-        (p) => p.challengeId === challengeId
+        (p) => p.challengeId.toString() === challengeId
     );
 
 
@@ -737,17 +739,28 @@ app.get('/challenges', withAuth, async (req, res) => {
             return res.status(400).json({ error: "User or preferred languages not found." });
         }
 
-        if (user.progressLevel === "beginner") {
-            user.progressLevel = "easy"
-        } else if (user.progressLevel === "intermediate") {
-            user.progressLevel = "medium"
-        } else {
-            user.progressLevel = "hard"
+        // Map progress level to allowed difficulties
+        let allowedDifficulties = [];
+        switch (user.progressLevel) {
+            case "beginner":
+                allowedDifficulties = ["easy"];
+                break;
+            case "intermediate":
+                allowedDifficulties = ["easy", "medium"];
+                break;
+            case "advanced":
+                allowedDifficulties = ["easy", "medium", "hard"];
+                break;
+            default:
+                allowedDifficulties = ["easy"]; // fallback
         }
 
         const challenges = await Challenge.find({
             languageForDisplay: { $in: user.languages },
-            difficulty: user.progressLevel
+            difficulty: { $in: allowedDifficulties }
+        }).sort({
+            // Optional: show harder first
+            difficulty: 1
         });
 
         res.json(challenges);
@@ -896,7 +909,6 @@ const runAllTestCases = async (testCases, code, language, versionIndex) => {
             });
 
             const data = await res.json();
-
             //console.log(data)
 
             results.push({
