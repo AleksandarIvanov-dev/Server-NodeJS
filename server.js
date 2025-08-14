@@ -642,55 +642,84 @@ app.post("/execute-code", withAuth, async (req, res) => {
 // Endpoint to track when the user started the challenge
 app.post("/start-challenge", withAuth, async (req, res) => {
     const { challengeId } = req.body;
-    const user = await User.findOne({ email: req.user.email });
+    const email = req.user.email;
 
-    const exists = user.solvedChallenges.find(p => p.challengeId.toString() === challengeId);
+    try {
+        // Add "started" challenge only if it doesn't already exist
+        await User.updateOne(
+            { email, "solvedChallenges.challengeId": { $ne: challengeId } },
+            {
+                $push: {
+                    solvedChallenges: {
+                        challengeId,
+                        status: "started",
+                        startedAt: new Date()
+                    }
+                }
+            }
+        );
 
-    if (!exists) {
-        user.solvedChallenges.push({
-            challengeId,
-            status: "started",
-            startedAt: new Date()
-        });
-        await user.save();
+        res.json({ success: true });
+    } catch (error) {
+        console.error("Error starting challenge:", error);
+        res.status(500).json({ error: "Server error." });
     }
-
-    res.json({ success: true });
 });
 
 // Endpoint to track when the user finished the challenge
 app.post("/end-challenge", withAuth, async (req, res) => {
     const { challengeId, code } = req.body;
-    const user = await User.findOne({ email: req.user.email });
+    const email = req.user.email;
 
-    const challenge = await Challenge.findById(challengeId);
+    try {
+        const challenge = await Challenge.findById(challengeId).lean();
 
-    const progress = user.solvedChallenges.find(
-        (p) => p.challengeId.toString() === challengeId
-    );
+        if (!challenge) {
+            return res.status(404).json({ error: "Challenge not found" });
+        }
 
+        // Update if challenge already exists in solvedChallenges
+        const updateResult = await User.updateOne(
+            { email, "solvedChallenges.challengeId": challengeId },
+            {
+                $set: {
+                    "solvedChallenges.$.status": "completed",
+                    "solvedChallenges.$.completedAt": new Date(),
+                    "solvedChallenges.$.code": code,
+                    "solvedChallenges.$.difficulty": challenge.difficulty
+                }
+            }
+        );
 
-    if (progress) {
-        progress.status = "completed";
-        progress.completedAt = new Date();
-        progress.code = code;
-        progress.difficulty = challenge.difficulty;
-    } else {
-        user.solvedChallenges.push({
-            challengeId,
-            difficulty: challenge.difficulty,
-            status: "completed",
-            solvedAt: new Date(),
-            code: code
-        });
+        // If it wasn't found, push it as completed
+        if (updateResult.matchedCount === 0) {
+            await User.updateOne(
+                { email },
+                {
+                    $push: {
+                        solvedChallenges: {
+                            challengeId,
+                            difficulty: challenge.difficulty,
+                            status: "completed",
+                            completedAt: new Date(),
+                            code
+                        }
+                    }
+                }
+            );
+        }
+
+        // Recalculate progress level
+        const user = await User.findOne({ email }, { solvedChallenges: 1 });
+        const progressLevel = calculateUserProgressLevel(user.solvedChallenges);
+        await User.updateOne({ email }, { $set: { progressLevel } });
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error("Error ending challenge:", error);
+        res.status(500).json({ error: "Server error." });
     }
-
-    user.progressLevel = calculateUserProgressLevel(user.solvedChallenges);
-
-    await user.save();
-    res.json({ success: true });
-})
-
+});
 // Endpoint to save user's completed Quiz
 app.post("/quiz-complete", withAuth, async (req, res) => {
     const { quizName, language } = req.body;
