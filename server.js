@@ -567,38 +567,53 @@ app.post("/end-tutorial", withAuth, async (req, res) => {
         const { tutorialName, tutorialLanguage } = req.body;
         const userEmail = req.user.email;
 
-        const user = await User.findOne({ email: userEmail });
-        if (!user) {
-            return res.status(404).json({ error: "User not found" });
+        // Use $elemMatch to ensure all conditions apply to the same array elements
+        const result = await User.findOneAndUpdate(
+            {
+                email: userEmail,
+                // Find a document that has an element in 'progressTutorial' that matches...
+                progressTutorial: {
+                    $elemMatch: {
+                        language: tutorialLanguage,
+                        // ...and within that element, a tutorial that matches these conditions
+                        tutorials: {
+                            $elemMatch: {
+                                tutorialName: tutorialName,
+                                endedAt: null // Crucially, check this on the specific tutorial
+                            }
+                        }
+                    }
+                }
+            },
+            {
+                // The update operation remains the same
+                $set: {
+                    "progressTutorial.$[lang].tutorials.$[tut].endedAt": new Date()
+                }
+            },
+            {
+                // Your arrayFilters are mostly correct, but we can make them safer
+                arrayFilters: [
+                    { "lang.language": tutorialLanguage },
+                    // Ensure the tutorial we update also matches the endedAt: null condition
+                    { "tut.tutorialName": tutorialName, "tut.endedAt": null }
+                ],
+                new: true // This returns the updated document
+            }
+        );
+
+        if (!result) {
+            return res.status(404).json({ error: "Tutorial not found, has not been started, or has already ended." });
         }
 
-        if (!Array.isArray(user.progressTutorial)) {
-            return res.status(400).json({ error: "No progress found" });
-        }
-
-        const langEntry = user.progressTutorial.find(entry => entry.language === tutorialLanguage);
-        if (!langEntry) {
-            return res.status(400).json({ error: "No progress for this language" });
-        }
-
-        const tutorialProgress = langEntry.tutorials.find(t => t.tutorialName === tutorialName);
-        if (!tutorialProgress) {
-            return res.status(400).json({ error: "Tutorial not started" });
-        }
-
-        if (!tutorialProgress.endedAt) {
-            tutorialProgress.endedAt = new Date();
-            await user.save();
-            return res.status(200).json({ message: "Tutorial ended" });
-        } else {
-            return res.status(200).json({ message: "Tutorial already ended" });
-        }
+        return res.status(200).json({ message: "Tutorial ended successfully." });
 
     } catch (error) {
         console.error("Error in end-tutorial:", error);
         res.status(500).json({ error: "Server error" });
     }
 });
+
 // Endpoint to execute user's code from coding challenges
 app.post("/execute-code", withAuth, async (req, res) => {
     const { challengeId, code, language, versionIndex } = req.body;

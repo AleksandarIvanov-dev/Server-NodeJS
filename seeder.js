@@ -177,7 +177,7 @@ const tutorials = [
         language: "Java"
     }
 
-
+    // JavaScript Tutorials
 ];
 
 async function connectToDB() {
