@@ -204,6 +204,7 @@ app.put("/updateLanguage", withAuth, async (req, res) => {
     }
 });
 
+// Endpoint to update user's profile information
 app.put("/updateuser", withAuth, async (req, res) => {
     const { firstName, lastName, email, password } = req.body;
 
@@ -290,10 +291,6 @@ app.post("/exam/results", withAuth, async (req, res) => {
 
     if (!userID) {
         return res.status(401).json({ error: "Unauthorized" });
-    }
-
-    if (!examId || !language || !answers || correctCount === undefined || totalQuestion === undefined) {
-        return res.status(400).json({ error: "Invalid request data. Please provide all required fields." });
     }
 
     try {
@@ -463,6 +460,7 @@ app.get("/getuserprofile", withAuth, async (req, res) => {
     }
 });
 
+// Endpoint to get user info, challenges, exams and tutorials
 app.get("/getuserinfo", withAuth, async (req, res) => {
     try {
         const userEmail = req.user.email;
@@ -681,7 +679,7 @@ app.post("/start-challenge", withAuth, async (req, res) => {
     }
 });
 
-// Endpoint to track when the user finished the challenge
+// Endpoint to track when the user finished the challenge and check user's progress
 app.post("/end-challenge", withAuth, async (req, res) => {
     const { challengeId, code } = req.body;
     const email = req.user.email;
@@ -848,10 +846,10 @@ app.get('/get-exams', withAuth, async (req, res) => {
 
 // Endpoint to save created exam-questions to DB
 app.post("/add-exam", withAuth, async (req, res) => {
-    const { language, questions, difficulty, examTime } = req.body;
+    const { title, description, language, questions, difficulty, examTime } = req.body;
     const isAuthorized = req.user.role;
 
-    //console.log(difficulty)
+    console.log(title, description)
 
     if (isAuthorized === "student") {
         return res.status(403).json({ message: "You are not authorized!" });
@@ -859,6 +857,8 @@ app.post("/add-exam", withAuth, async (req, res) => {
 
     try {
         const newExam = new Exam({
+            title,
+            description,
             language,
             difficulty,
             questions,
@@ -875,20 +875,18 @@ app.post("/add-exam", withAuth, async (req, res) => {
     }
 });
 
-app.get("/get-exam/:language", withAuth, async (req, res) => {
-    const lang = req.params.language;
-
-    const exams = await Exam.find({ language: lang });
-    // Exam.find() returns an array; if no matches, it returns an empty array [] which is truthy.
-    if (!exams || exams.length === 0) {
-        return res.status(404).json({ message: "No exam with the provided language exists!" });
+app.get("/get-exam/:id", async (req, res) => {
+    try {
+        const exam = await Exam.findById(req.params.id);
+        if (!exam) {
+            return res.status(404).json({ message: "Exam not found" });
+        }
+        res.json(exam);
+    } catch (err) {
+        res.status(500).json({ message: "Server error" });
     }
-
-    // One exam per language
-    const exam = exams[0];
-
-    res.json(exam);
 });
+
 
 app.post("/get-tutorials", withAuth, async (req, res) => {
     const userEmail = req.user.email;
@@ -924,7 +922,7 @@ function calculateUserProgressLevel(solvedChallenges) {
 
     if (total < 5 || (easy >= total * 0.8)) {
         return 'beginner';
-    } else if (medium >= total * 0.4 || hard >= 1) {
+    } else if (medium >= total * 0.4 || hard >= 2) {
         return 'intermediate';
     } else if (hard >= total * 0.5 || total >= 15) {
         return 'advanced';

@@ -16,6 +16,14 @@ const questionSchema = new mongoose.Schema({
 });
 
 const examSchema = new mongoose.Schema({
+    title: {
+        type: String,
+        required: true,
+    },
+    description: {
+        type: String,
+        required: true,
+    },
     language: {
         type: String,
         required: true,
