@@ -15,6 +15,7 @@ const Tutorial = require('./Schemas/tutorialSchema')
 const User = require('./Schemas/userSchema');
 const Challenge = require('./Schemas/challengeSchema');
 const Exam = require('./Schemas/examSchema')
+const CodeExam = require('./Schemas/codeExamSchema')
 
 
 // Initialize the Express application
@@ -93,7 +94,7 @@ const saltRounds = 10;
 // Endpoint to save user data
 app.post("/createNewUser", async (req, res) => {
     const { firstName, lastName, email, password, role } = req.body;
-    const isStudent = role === "student";
+    //const isStudent = role === "student";
 
     // Validate the user data
     if (!firstName || !lastName || !email || password === undefined || password === null) {
@@ -360,86 +361,177 @@ app.post("/exam/results", withAuth, async (req, res) => {
     }
 });
 
+// Endpoint to evaluate if the user passed the code exam or not
+app.post("/coding-exam/results", withAuth, async (req, res) => {
+    const { clientId, clientSecret, examId, code, language, versionIndex } = req.body
+
+    const userId = req.user.id
+    if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+    try {
+        const user = await User.findOne({ _id: userId })
+
+        if (!user) {
+            return res.status(404).json({ error: "User not found!" })
+        }
+
+        const exam = await CodeExam.findOne({ _id: examId })
+
+        if (!exam) {
+            return res.status(404).json({ error: "Exam not found!" })
+        }
+
+        const testResults = await runAllTestCases(clientId, clientSecret, exam.testCases, code, language, versionIndex);
+
+        const allPassed = testResults.every(r => r.passed == true)
+
+        const examResult = {
+            codeExamId: exam._id,
+            code,
+            status: allPassed ? "passed" : "failed",
+            title: exam.title,
+            submittedAt: new Date(),
+            testCasesPassed: testResults.filter(r => r.passed == true).length,
+            totalTestCases: exam.testCases.length,
+            output: testResults.every(r => r.output) + "\n"
+        }
+
+        user.codeExamSolved.push(examResult)
+        await user.save()
+
+        return res.json({
+            success: true,
+            status: examResult.status,
+            testResults,
+            examResult
+        })
+
+    } catch (error) {
+        console.error("Error saving exam result:", error);
+        return res.status(500).json({ error: "Failed to save exam result" });
+    }
+
+})
+
 // Endpoint to get answers for a specific exam by ID
+// Взимаме резултатите по solvedExamId (а не examId)
 app.get("/exam/answers/:examId", withAuth, async (req, res) => {
-    const examId = req.params.examId;
+  const examId = req.params.examId;
+  const userEmail = req.user.email;
+
+  try {
+    const user = await User.findOne({ email: userEmail }).populate({
+      path: "solvedExams",
+      populate: { path: "examId", model: "Exam" }
+    });
+
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    // Намираме solvedExam за дадения examId
+    const solvedExam = user.solvedExams.find(
+      se => se.examId && se.examId._id.toString() === examId
+    );
+
+    if (!solvedExam) {
+      return res.status(404).json({ error: "No solved exam found for this examId" });
+    }
+
+    const exam = solvedExam.examId;
+    if (!exam || !Array.isArray(exam.questions)) {
+      return res.status(500).json({ error: "Exam data is incomplete" });
+    }
+
+    // Създаваме map на отговорите на потребителя
+    const userAnswersMap = {};
+    solvedExam.allAnswers.forEach(({ questionId, answer }) => {
+      userAnswersMap[questionId] = answer;
+    });
+
+    let correctCount = 0;
+    const questionsWithUserAnswers = exam.questions.map((q) => {
+      const userAnswer = userAnswersMap[q._id.toString()] || null;
+      const isCorrect =
+        Array.isArray(userAnswer) &&
+        Array.isArray(q.correctAnswers) &&
+        userAnswer.length === q.correctAnswers.length &&
+        userAnswer.every(ans => q.correctAnswers.includes(ans));
+
+      if (isCorrect) correctCount++;
+
+      return {
+        questionId: q._id.toString(),
+        questionText: q.questionText,
+        options: q.options,
+        correctAnswers: q.correctAnswers,
+        userAnswer,
+        isCorrect
+      };
+    });
+
+    const totalQuestions = exam.questions.length;
+    const wrongCount = totalQuestions - correctCount;
+    const grade = ((correctCount / totalQuestions) * 4) + 2;
+
+    res.json({
+      examId: exam._id,
+      solvedExamId: solvedExam._id,
+      title: exam.title,
+      description: exam.description,
+      language: exam.language,
+      difficulty: exam.difficulty,
+      time: exam.time,
+      createdAt: exam.createdAt,
+      solvedAt: solvedExam.submittedAt,
+      totalQuestions,
+      correctCount,
+      wrongCount,
+      grade,
+      questions: questionsWithUserAnswers
+    });
+
+  } catch (err) {
+    console.error("Error fetching exam answers:", err);
+    res.status(500).json({ error: "Failed to fetch exam answers" });
+  }
+});
+
+
+
+app.get("/exam/code/answers/:id", withAuth, async (req, res) => {
+    const id = req.params.id;
     const userEmail = req.user.email;
 
     try {
-        const user = await User.findOne({ email: userEmail }).populate({
-            path: "solvedExams.examId",
-            model: "Exam",
-        });
+        const user = await User.findOne({ email: userEmail });
 
         if (!user) {
             return res.status(404).json({ error: "User not found" });
         }
 
-        const solvedExam = user.solvedExams.find(se =>
-            se.examId && se.examId._id.toString() === examId
-        );
-        if (!solvedExam) {
-            return res.status(404).json({ error: "Solved exam not found for user" });
+        // Filter all submissions for the specific code exam
+        const submissions = user.codeExamSolved
+            .filter(se => se.codeExamId.toString() === id)
+            .map(se => ({
+                codeExamId: se.codeExamId,
+                code: se.code,
+                title: se.title,
+                submittedAt: se.submittedAt,
+                status: se.status,
+                testCasesPassed: se.testCasesPassed,
+                totalTestCases: se.totalTestCases,
+                output: se.output
+            }));
+
+        if (submissions.length === 0) {
+            return res.status(404).json({ error: "No submissions found for this exam" });
         }
 
-        const exam = solvedExam.examId;
-
-        if (!exam || !Array.isArray(exam.questions)) {
-            return res.status(500).json({ error: "Exam data is incomplete" });
-        }
-
-        // Build user answers map
-        const userAnswersMap = {};
-        if (Array.isArray(solvedExam.allAnswers)) {
-            solvedExam.allAnswers.forEach(({ questionId, answer }) => {
-                if (questionId) {
-                    userAnswersMap[questionId.toString()] = answer;
-                }
-            });
-        }
-
-        let correctCount = 0;
-        const questionsWithUserAnswers = exam.questions.map((q) => {
-            const userAnswer = userAnswersMap[q._id.toString()] || null;
-            const isCorrect =
-                Array.isArray(userAnswer) &&
-                Array.isArray(q.correctAnswers) &&
-                userAnswer.length === q.correctAnswers.length &&
-                userAnswer.every(ans => q.correctAnswers.includes(ans));
-
-            if (isCorrect) correctCount++;
-
-            return {
-                questionId: q._id.toString(),
-                questionText: q.questionText,
-                options: q.options,
-                correctAnswers: q.correctAnswers,
-                userAnswer,
-                isCorrect
-            };
-        });
-
-        const totalQuestions = exam.questions.length;
-        const wrongCount = totalQuestions - correctCount;
-        const grade = ((correctCount / totalQuestions) * 4) + 2;
-
-        return res.json({
-            examId: exam._id,
-            language: exam.language,
-            difficulty: exam.difficulty,
-            time: exam.time,
-            createdAt: exam.createdAt,
-            solvedAt: solvedExam.submittedAt,
-            totalQuestions,
-            correctCount,
-            wrongCount,
-            grade,
-            questions: questionsWithUserAnswers
-        });
+        return res.json({ submissions });
 
     } catch (error) {
-        console.error("Error fetching exam answers:", error);
-        return res.status(500).json({ error: "Failed to fetch exam answers" });
+        console.error("Error fetching exam submissions:", error);
+        return res.status(500).json({ error: "Failed to fetch exam submissions" });
     }
 });
 
@@ -614,7 +706,7 @@ app.post("/end-tutorial", withAuth, async (req, res) => {
 
 // Endpoint to execute user's code from coding challenges
 app.post("/execute-code", withAuth, async (req, res) => {
-    const { challengeId, code, language, versionIndex } = req.body;
+    const { clientId, clientSecret, challengeId, code, language, versionIndex } = req.body;
     const userEmail = req.user.email;
 
     const user = await User.findOne({ email: userEmail });
@@ -628,7 +720,8 @@ app.post("/execute-code", withAuth, async (req, res) => {
         return res.status(404).json({ error: "Challenge not found!" });
     }
 
-    const testResults = await runAllTestCases(challenge.testCases, code, language, versionIndex);
+    const testResults = await runAllTestCases(clientId, clientSecret, challenge.testCases, code, language, versionIndex);
+    //console.log("test Results: ", testResults)
 
     const allPassed = testResults.every(r => r.passed);
 
@@ -643,7 +736,7 @@ app.post("/execute-code", withAuth, async (req, res) => {
         }
     }
 
-    //console.log(allPassed, testResults)
+    //console.log(testResults)
 
     return res.status(200).json({
         success: allPassed,
@@ -826,7 +919,7 @@ app.get('/challenge/:id', withAuth, async (req, res) => {
 });
 
 // Endpoint to get all exam's based on user's languages
-app.get('/get-exams', withAuth, async (req, res) => {
+app.get('/get/exams', withAuth, async (req, res) => {
     const userEmail = req.user.email;
     try {
         const user = await User.findOne({ email: userEmail })
@@ -844,8 +937,29 @@ app.get('/get-exams', withAuth, async (req, res) => {
     }
 })
 
+// Endpoint to get all code exam's based on user's language
+app.get('/get/code-exams', withAuth, async (req, res) => {
+    const userEmail = req.user.email
+    if (!userEmail) {
+        return res.status(404).json({ error: "User not found" });
+    }
+
+    try {
+        const user = await User.findOne({ email: userEmail })
+        const codeExams = await CodeExam.find({ language: { $in: user.languages } })
+
+        res.json(codeExams)
+    } catch (error) {
+        console.error("Error fetching user info:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+
+
+
+})
+
 // Endpoint to save created exam-questions to DB
-app.post("/add-exam", withAuth, async (req, res) => {
+app.post("/add/exam", withAuth, async (req, res) => {
     const { title, description, language, questions, difficulty, examTime } = req.body;
     const isAuthorized = req.user.role;
 
@@ -875,7 +989,42 @@ app.post("/add-exam", withAuth, async (req, res) => {
     }
 });
 
-app.get("/get-exam/:id", async (req, res) => {
+// Endpoint to create a new coding exam
+app.post("/add/code-exam", withAuth, async (req, res) => {
+    const { title, description, language, code, starterCode, testCases, difficulty, time } = req.body;
+    //console.log(req.body)
+    const isAuthorized = req.user.role;
+
+    if (isAuthorized === "student") {
+        return res.status(403).json({ message: "You are not authorized!" });
+    }
+
+    try {
+        const newExam = new CodeExam({
+            title,
+            description,
+            language,
+            difficulty,
+            time: time,
+            code,
+            starterCode,
+            testCases: testCases,
+            createdAt: new Date(),
+
+        });
+
+        await newExam.save();
+
+        res.status(200).json({ message: "Exam added successfully." });
+
+    } catch (error) {
+        console.error("Error adding exam questions:", error);
+        res.status(500).json({ message: "Server error" });
+    }
+});
+
+app.get("/exam/start/:id", async (req, res) => {
+    console.log("hello")
     try {
         const exam = await Exam.findById(req.params.id);
         if (!exam) {
@@ -883,10 +1032,24 @@ app.get("/get-exam/:id", async (req, res) => {
         }
         res.json(exam);
     } catch (err) {
+        console.error(err)
         res.status(500).json({ message: "Server error" });
     }
 });
 
+app.get("/get/code-exam/:id", async (req, res) => {
+    try {
+        //console.log(req.params.id)
+        const exam = await CodeExam.findById(req.params.id);
+        if (!exam) {
+            return res.status(404).json({ message: "Exam not found" });
+        }
+        res.json(exam);
+    } catch (err) {
+        console.error(err)
+        res.status(500).json({ message: "Server error" });
+    }
+});
 
 app.post("/get-tutorials", withAuth, async (req, res) => {
     const userEmail = req.user.email;
@@ -932,7 +1095,7 @@ function calculateUserProgressLevel(solvedChallenges) {
 }
 
 // Function to run all test cases for a given code snippet
-const runAllTestCases = async (testCases, code, language, versionIndex) => {
+const runAllTestCases = async (clientId, clientSecret, testCases, code, language, versionIndex) => {
     const results = [];
 
     for (const testCase of testCases) {
@@ -941,8 +1104,8 @@ const runAllTestCases = async (testCases, code, language, versionIndex) => {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    clientId: "740b7e52c332bbbce02cdf69cb87461d",
-                    clientSecret: "3b2d3849be5207c8e9354bb38d51100b12867d1f9a94d3e5540b7b821cc91b43",
+                    clientId: clientId,
+                    clientSecret: clientSecret,
                     script: code,
                     language: language,
                     versionIndex: versionIndex,
@@ -951,7 +1114,7 @@ const runAllTestCases = async (testCases, code, language, versionIndex) => {
             });
 
             const data = await res.json();
-            //console.log(data)
+            //console.log(data.output)
 
             results.push({
                 input: testCase.input,
@@ -961,6 +1124,7 @@ const runAllTestCases = async (testCases, code, language, versionIndex) => {
             });
 
         } catch (err) {
+            //console.error(err)
             results.push({
                 input: testCase.input,
                 expected: testCase.expectedOutput,
@@ -972,6 +1136,7 @@ const runAllTestCases = async (testCases, code, language, versionIndex) => {
 
     return results;
 };
+
 
 // Function to connect to MongoDB
 async function connectToDB() {

@@ -69,6 +69,20 @@ const userSchema = new mongoose.Schema({
             submittedAt: { type: Date, default: Date.now }
         }
     ],
+    codeExamSolved: [
+        {
+            codeExamId: { type: mongoose.Schema.Types.ObjectId, ref: "codingExam" },
+            code: { type: String },
+            title: { type: String },
+            language: { type: String },
+            submittedAt: { type: Date, default: Date.now },
+            status: { type: String, enum: ["pending", "passed", "failed"], default: "pending" },
+            score: { type: Number },
+            testCasesPassed: { type: Number },
+            totalTestCases: { type: Number },
+            output: { type: String },
+        }
+    ],
     progressTutorial: [
         {
             language: { type: String, required: true },

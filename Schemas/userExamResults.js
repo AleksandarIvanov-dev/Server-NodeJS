@@ -6,7 +6,7 @@ const userExamResultsSchema = new mongoose.Schema({
         ref: 'User',
         required: true
     },
-    examId: { type: mongoose.Schema.Types.ObjectId, ref: "exams", required: true },
+    examId: { type: mongoose.Schema.Types.ObjectId, ref: "Exam", required: true },
     language: String,
     answers: Object,
     correctCount: Number,
