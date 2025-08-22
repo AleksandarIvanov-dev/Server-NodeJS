@@ -15,7 +15,7 @@ const Tutorial = require('./Schemas/tutorialSchema')
 const User = require('./Schemas/userSchema');
 const Challenge = require('./Schemas/challengeSchema');
 const Exam = require('./Schemas/examSchema')
-const CodeExam = require('./Schemas/codeExamSchema')
+const CodeExam = require('./Schemas/codeExamSchema');
 
 
 // Initialize the Express application
@@ -27,6 +27,7 @@ app.use(cors({
     credentials: true
 }));
 app.use(express.json());
+app.use(express.text({ type: "application/json" }));
 app.use("/Images", express.static(path.join(__dirname, "Images")));
 
 const port = 5000;
@@ -119,7 +120,7 @@ app.post("/createNewUser", async (req, res) => {
         await newUser.save();
 
         const token = jwt.sign({ id: newUser._id, email: newUser.email, role: newUser.role }, jwtSecretKey, {
-            expiresIn: '1h',
+            expiresIn: "1h"
         });
 
         res.cookie('token', token, { httpOnly: true, }).status(200);
@@ -417,86 +418,84 @@ app.post("/coding-exam/results", withAuth, async (req, res) => {
 // Endpoint to get answers for a specific exam by ID
 // Взимаме резултатите по solvedExamId (а не examId)
 app.get("/exam/answers/:examId", withAuth, async (req, res) => {
-  const examId = req.params.examId;
-  const userEmail = req.user.email;
+    const examId = req.params.examId;
+    const userEmail = req.user.email;
 
-  try {
-    const user = await User.findOne({ email: userEmail }).populate({
-      path: "solvedExams",
-      populate: { path: "examId", model: "Exam" }
-    });
+    try {
+        const user = await User.findOne({ email: userEmail }).populate({
+            path: "solvedExams",
+            populate: { path: "examId", model: "Exam" }
+        });
 
-    if (!user) return res.status(404).json({ error: "User not found" });
+        if (!user) return res.status(404).json({ error: "User not found" });
 
-    // Намираме solvedExam за дадения examId
-    const solvedExam = user.solvedExams.find(
-      se => se.examId && se.examId._id.toString() === examId
-    );
+        // Намираме solvedExam за дадения examId
+        const solvedExam = user.solvedExams.find(
+            se => se.examId && se.examId._id.toString() === examId
+        );
 
-    if (!solvedExam) {
-      return res.status(404).json({ error: "No solved exam found for this examId" });
+        if (!solvedExam) {
+            return res.status(404).json({ error: "No solved exam found for this examId" });
+        }
+
+        const exam = solvedExam.examId;
+        if (!exam || !Array.isArray(exam.questions)) {
+            return res.status(500).json({ error: "Exam data is incomplete" });
+        }
+
+        // Създаваме map на отговорите на потребителя
+        const userAnswersMap = {};
+        solvedExam.allAnswers.forEach(({ questionId, answer }) => {
+            userAnswersMap[questionId] = answer;
+        });
+
+        let correctCount = 0;
+        const questionsWithUserAnswers = exam.questions.map((q) => {
+            const userAnswer = userAnswersMap[q._id.toString()] || null;
+            const isCorrect =
+                Array.isArray(userAnswer) &&
+                Array.isArray(q.correctAnswers) &&
+                userAnswer.length === q.correctAnswers.length &&
+                userAnswer.every(ans => q.correctAnswers.includes(ans));
+
+            if (isCorrect) correctCount++;
+
+            return {
+                questionId: q._id.toString(),
+                questionText: q.questionText,
+                options: q.options,
+                correctAnswers: q.correctAnswers,
+                userAnswer,
+                isCorrect
+            };
+        });
+
+        const totalQuestions = exam.questions.length;
+        const wrongCount = totalQuestions - correctCount;
+        const grade = ((correctCount / totalQuestions) * 4) + 2;
+
+        res.json({
+            examId: exam._id,
+            solvedExamId: solvedExam._id,
+            title: exam.title,
+            description: exam.description,
+            language: exam.language,
+            difficulty: exam.difficulty,
+            time: exam.time,
+            createdAt: exam.createdAt,
+            solvedAt: solvedExam.submittedAt,
+            totalQuestions,
+            correctCount,
+            wrongCount,
+            grade,
+            questions: questionsWithUserAnswers
+        });
+
+    } catch (err) {
+        console.error("Error fetching exam answers:", err);
+        res.status(500).json({ error: "Failed to fetch exam answers" });
     }
-
-    const exam = solvedExam.examId;
-    if (!exam || !Array.isArray(exam.questions)) {
-      return res.status(500).json({ error: "Exam data is incomplete" });
-    }
-
-    // Създаваме map на отговорите на потребителя
-    const userAnswersMap = {};
-    solvedExam.allAnswers.forEach(({ questionId, answer }) => {
-      userAnswersMap[questionId] = answer;
-    });
-
-    let correctCount = 0;
-    const questionsWithUserAnswers = exam.questions.map((q) => {
-      const userAnswer = userAnswersMap[q._id.toString()] || null;
-      const isCorrect =
-        Array.isArray(userAnswer) &&
-        Array.isArray(q.correctAnswers) &&
-        userAnswer.length === q.correctAnswers.length &&
-        userAnswer.every(ans => q.correctAnswers.includes(ans));
-
-      if (isCorrect) correctCount++;
-
-      return {
-        questionId: q._id.toString(),
-        questionText: q.questionText,
-        options: q.options,
-        correctAnswers: q.correctAnswers,
-        userAnswer,
-        isCorrect
-      };
-    });
-
-    const totalQuestions = exam.questions.length;
-    const wrongCount = totalQuestions - correctCount;
-    const grade = ((correctCount / totalQuestions) * 4) + 2;
-
-    res.json({
-      examId: exam._id,
-      solvedExamId: solvedExam._id,
-      title: exam.title,
-      description: exam.description,
-      language: exam.language,
-      difficulty: exam.difficulty,
-      time: exam.time,
-      createdAt: exam.createdAt,
-      solvedAt: solvedExam.submittedAt,
-      totalQuestions,
-      correctCount,
-      wrongCount,
-      grade,
-      questions: questionsWithUserAnswers
-    });
-
-  } catch (err) {
-    console.error("Error fetching exam answers:", err);
-    res.status(500).json({ error: "Failed to fetch exam answers" });
-  }
 });
-
-
 
 app.get("/exam/code/answers/:id", withAuth, async (req, res) => {
     const id = req.params.id;
@@ -772,6 +771,69 @@ app.post("/start-challenge", withAuth, async (req, res) => {
     }
 });
 
+// Endpoint to save user's progress after leaving the web page
+app.post("/save/challenge-progress", withAuth, async (req, res) => {
+    const { challengeId, code } = req.body;
+    const email = req.user.email;
+    try {
+        // Add "started" challenge only if it doesn't already exist
+        const updateResult = await User.updateOne(
+            { email, "solvedChallenges.challengeId": challengeId },
+            {
+                $set: {
+                    "solvedChallenges.$.userCode": code,
+                    "solvedChallenges.$.status": "started",
+                    "solvedChallenges.$.updatedAt": new Date()
+                }
+            }
+        );
+
+        if (updateResult.matchedCount === 0) {
+            // If not found, insert new
+            await User.updateOne(
+                { email },
+                {
+                    $push: {
+                        solvedChallenges: {
+                            challengeId,
+                            userCode: code,
+                            status: "started",
+                            startedAt: new Date(),
+                            updatedAt: new Date()
+                        }
+                    }
+                }
+            );
+        }
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error("Error starting challenge:", error);
+        res.status(500).json({ error: "Server error." });
+    }
+});
+
+// Endpoint send to front-end user's saved progress
+app.post("/get/challenge-progress", withAuth, async (req, res) => {
+    const { id } = req.body
+    try {
+        const userEmail = req.user.email
+
+        const user = await User.findOne({ email: userEmail })
+
+        if (!user) {
+            return res.status(400).json({ error: "User not found." });
+        }
+
+        const started = user.solvedChallenges.filter(c => c.challengeId.toString() === id)
+
+        res.json({ challenges: started });
+
+    } catch (error) {
+        console.log(error)
+    }
+})
+
 // Endpoint to track when the user finished the challenge and check user's progress
 app.post("/end-challenge", withAuth, async (req, res) => {
     const { challengeId, code } = req.body;
@@ -963,7 +1025,7 @@ app.post("/add/exam", withAuth, async (req, res) => {
     const { title, description, language, questions, difficulty, examTime } = req.body;
     const isAuthorized = req.user.role;
 
-    console.log(title, description)
+    //console.log(title, description)
 
     if (isAuthorized === "student") {
         return res.status(403).json({ message: "You are not authorized!" });
@@ -1024,7 +1086,6 @@ app.post("/add/code-exam", withAuth, async (req, res) => {
 });
 
 app.get("/exam/start/:id", async (req, res) => {
-    console.log("hello")
     try {
         const exam = await Exam.findById(req.params.id);
         if (!exam) {
@@ -1067,6 +1128,45 @@ app.post("/get-tutorials", withAuth, async (req, res) => {
     } catch (error) {
         console.log(error);
         res.status(500).json({ error: "Server error." });
+    }
+});
+
+// Endpoint to update exp date to JWT token 
+app.post('/update-jwt', withAuth, async (req, res) => {
+    const { examId } = req.body;
+    const token = req.cookies.token;
+
+    try {
+        const exam = await Exam.findOne({ _id: examId }, { time: 1 });
+        if (!exam) {
+            return res.status(404).json({ error: "Exam not found" });
+        }
+
+        const examTimeInSeconds = exam.time / 1000;
+        const decoded = jwt.decode(token);
+        const currentTimeInSec = Math.floor(Date.now() / 1000);
+
+        // Calculate the new expiration TIMESTAMP
+        // (Current Time + Remaining Time + Extra Exam Time)
+        const newExpTimestamp = decoded.exp + examTimeInSeconds
+
+        // A simpler way to think about it is just extending the original expiry time
+        // const newExpTimestamp = decoded.exp + examTimeInSeconds;
+
+        // Sign a new token with the UPDATED 'exp' field
+        const newToken = jwt.sign({
+            ...decoded,
+            iat: currentTimeInSec, // It's good practice to update the 'issued at' time as well
+            exp: newExpTimestamp   // Use the standard 'exp' field with the new timestamp
+        }, jwtSecretKey);
+
+        res.cookie('token', newToken, { httpOnly: true }).status(200).json({
+            message: "Token updated successfully"
+        });
+
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ error: "An error occurred while updating the token" });
     }
 });
 // Function to calculate user's progress level

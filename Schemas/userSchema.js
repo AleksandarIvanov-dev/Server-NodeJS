@@ -43,6 +43,9 @@ const userSchema = new mongoose.Schema({
         {
             challengeId: { type: mongoose.Schema.Types.ObjectId, ref: "Challenge" },
             status: { type: String, enum: ["not started", "started", "completed"], default: "not started" },
+            userCode: {
+                type: String,
+            },
             solvedAt: { type: Date, default: Date.now },
             completedAt: { type: Date },
             code: String,
