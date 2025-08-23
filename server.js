@@ -383,6 +383,7 @@ app.post("/coding-exam/results", withAuth, async (req, res) => {
             return res.status(404).json({ error: "Exam not found!" })
         }
 
+        // testResults is an array of objects
         const testResults = await runAllTestCases(clientId, clientSecret, exam.testCases, code, language, versionIndex);
 
         const allPassed = testResults.every(r => r.passed == true)
@@ -395,7 +396,7 @@ app.post("/coding-exam/results", withAuth, async (req, res) => {
             submittedAt: new Date(),
             testCasesPassed: testResults.filter(r => r.passed == true).length,
             totalTestCases: exam.testCases.length,
-            output: testResults.every(r => r.output) + "\n"
+            output: testResults.map(r => r.output)
         }
 
         user.codeExamSolved.push(examResult)
@@ -511,16 +512,8 @@ app.get("/exam/code/answers/:id", withAuth, async (req, res) => {
         // Filter all submissions for the specific code exam
         const submissions = user.codeExamSolved
             .filter(se => se.codeExamId.toString() === id)
-            .map(se => ({
-                codeExamId: se.codeExamId,
-                code: se.code,
-                title: se.title,
-                submittedAt: se.submittedAt,
-                status: se.status,
-                testCasesPassed: se.testCasesPassed,
-                totalTestCases: se.totalTestCases,
-                output: se.output
-            }));
+
+            //console.log(submissions)
 
         if (submissions.length === 0) {
             return res.status(404).json({ error: "No submissions found for this exam" });

@@ -83,7 +83,7 @@ const userSchema = new mongoose.Schema({
             score: { type: Number },
             testCasesPassed: { type: Number },
             totalTestCases: { type: Number },
-            output: { type: String },
+            output: { type: [String] },
         }
     ],
     progressTutorial: [
