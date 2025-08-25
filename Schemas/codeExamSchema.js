@@ -33,6 +33,12 @@ const codeExamSchema = new mongoose.Schema({
             expectedOutput: String,
         }
     ],
+    sampleInput: {
+        type: String,
+    },
+    sampleOutput: {
+        type: String,
+    },
     createdAt: {
         type: Date,
         default: Date.now

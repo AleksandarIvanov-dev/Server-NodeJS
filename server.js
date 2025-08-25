@@ -513,7 +513,7 @@ app.get("/exam/code/answers/:id", withAuth, async (req, res) => {
         const submissions = user.codeExamSolved
             .filter(se => se.codeExamId.toString() === id)
 
-            //console.log(submissions)
+        //console.log(submissions)
 
         if (submissions.length === 0) {
             return res.status(404).json({ error: "No submissions found for this exam" });
@@ -1051,7 +1051,7 @@ app.post("/add/code-exam", withAuth, async (req, res) => {
     const isAuthorized = req.user.role;
 
     if (isAuthorized === "student") {
-        return res.status(403).json({ message: "You are not authorized!" });
+        return res.status(401).json({ message: "You are not authorized!" });
     }
 
     try {
@@ -1162,6 +1162,150 @@ app.post('/update-jwt', withAuth, async (req, res) => {
         res.status(500).json({ error: "An error occurred while updating the token" });
     }
 });
+
+// Endpoint to delete an user by Id
+app.delete("/delete-user/:id", withAuth, async (req, res) => {
+    const userEmail = req.user.email
+    const userId = req.params.id
+
+    try {
+        const user = await User.findOne({ email: userEmail });
+
+        if (!user || user.role !== "admin") {
+            return res.status(403).json({ message: "You are not authorized!" });
+        }
+
+        const deletedUser = await User.deleteOne({ _id: userId })
+
+        if (deletedUser.deletedCount === 0) {
+            return res.status(501).json({ message: "Failed to delete user with provided id" })
+        }
+
+        return res.status(200).json({ message: "User deleted!" })
+    } catch (error) {
+        console.log(error)
+        return res.status(500).json({ message: "Internal server error" });
+    }
+})
+
+const USERS_PER_PAGE = 10;
+app.get("/get-users", withAuth, async (req, res) => {
+    const userEmail = req.user.email;
+    const page = parseInt(req.query.page)
+
+    try {
+        const user = await User.findOne({ email: userEmail });
+        if (!user || user.role !== "admin") {
+            return res.status(401).json({ message: "You are not authorized!" });
+        }
+        const skip = (page - 1) * USERS_PER_PAGE
+        const count = await User.estimatedDocumentCount({})
+        const users = await User.find({}).limit(USERS_PER_PAGE).skip(skip)
+
+        const pageCount = Math.ceil(count / USERS_PER_PAGE);
+
+        return res.status(200).json({
+            pagination: {
+                count,
+                pageCount
+            },
+            users
+        });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+});
+
+// Get user info by id
+app.get("/get-user/:id", withAuth, async (req, res) => {
+    const userEmail = req.user.email
+    const userId = req.params.id
+
+    try {
+        const user = await User.findOne({ email: userEmail });
+
+        if (!user || user.role !== "admin") {
+            return res.status(401).json({ message: "You are not authorized!" });
+        }
+
+        const foundUser = await User.findOne({ _id: userId })
+        if (!foundUser) {
+            return res.status(404).json({ message: "User not found!" });
+        }
+
+        return res.status(200).json(foundUser)
+    } catch (error) {
+        console.log(error)
+        return res.status(500).json({ message: "Internal server error" });
+    }
+})
+
+app.put("/put-user", withAuth, async (req, res) => {
+    const userEmail = req.user.email
+    const { id, firstName, lastName, email, role, progressLevel } = req.body
+
+    const updatedFields = {}
+    updatedFields.progressLevel = progressLevel
+    
+    if (firstName) {
+        if (validator.matches(firstName, /^[a-zA-Z'-]+$/)) {
+            updatedFields.firstName = firstName
+        } else {
+            return res.status(400).json({ error: "Invalid first name format." });
+        }
+    }
+
+    if (lastName) {
+        if (validator.matches(lastName, /^[a-zA-Z'-]+$/)) {
+            updatedFields.lastName = lastName
+        } else {
+            return res.status(400).json({ error: "Invalid last name format." });
+        }
+    }
+
+    if (role) {
+        if (validator.matches(role, /^[a-zA-Z'-]+$/)) {
+            updatedFields.role = role
+        } else {
+            return res.status(400).json({ error: "Invalid role format." });
+        }
+    }
+
+    if (email) {
+        if (validator.isEmail(email)) {
+            updatedFields.email = email
+        } else {
+            return res.status(400).json({ error: "Invalid email format." });
+        }
+    }
+
+    if (Object.keys(updatedFields).length === 0) {
+        return res.status(400).json({ error: "No valid fields provided for update." });
+    }
+
+    try {
+        const user = await User.findOne({ email: userEmail })
+
+        if (!user || user.role != "admin") {
+            return res.status(401).json({ message: "You are not authorized!" });
+        }
+
+        const newUser = await User.findOneAndUpdate(
+            { _id: id }, // Find the user by their ID from the auth token
+            { $set: updatedFields }, // Use the dynamically built object with $set
+            { new: true, runValidators: true } // Return the updated document and run schema validators
+        );
+
+        res.status(200).json({
+            message: "User updated successfully",
+            newUser
+        });
+    } catch (error) {
+        console.log(error)
+        return res.status(500).json({ message: "Internal server error" });
+    }
+})
 // Function to calculate user's progress level
 function calculateUserProgressLevel(solvedChallenges) {
     let easy = 0, medium = 0, hard = 0;
