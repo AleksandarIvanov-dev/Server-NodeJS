@@ -1311,7 +1311,7 @@ app.put("/put-user", withAuth, async (req, res) => {
 // Endpoint to create a new user doc
 app.post("/add-user", withAuth, async (req, res) => {
     const userEmail = req.user.email
-    const { firstName, lastName, email, role, progressLevel } = req.body
+    const { firstName, lastName, password, email, role, language, progressLevel } = req.body
 
     try {
         const user = await User.findOne({ email: userEmail })
@@ -1324,12 +1324,15 @@ app.post("/add-user", withAuth, async (req, res) => {
         if (existing) {
             return res.status(409).json({ message: "User with this email already exists" });
         }
+        const hash = await bcrypt.hash(password, 10);
 
         const createdUser = await User.create({
             firstName,
             lastName,
+            password: hash,
             email,
             role,
+            languages: language,
             progressLevel,
         });
 
