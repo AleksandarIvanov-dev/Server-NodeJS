@@ -93,7 +93,12 @@ const userSchema = new mongoose.Schema({
                 {
                     tutorialName: { type: String, required: true },
                     startedAt: { type: Date },
-                    endedAt: { type: Date }
+                    endedAt: { type: Date },
+                    status: {
+                        type: String,
+                        enum: ['not started', 'started', 'finished'],
+                        default: 'not started'
+                    }
                 }
             ]
         }
