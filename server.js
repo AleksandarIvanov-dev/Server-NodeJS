@@ -605,32 +605,11 @@ app.post("/get-tutorial", withAuth, async (req, res) => {
             return res.status(400).json({ error: "User not found." });
         }
 
-        // Get all tutorials that match user's languages
-        const allTutorials = await Tutorial.find({
+        const tutorials = await Tutorial.find({
             language: { $in: user.languages }
-        }).sort({ title: 1 });
+        }).sort({ title: 1 }).limit(3);
 
-        // Filter out tutorials that are already started or finished
-        const availableTutorials = allTutorials.filter(tutorial => {
-            // Find if this tutorial exists in user's progress
-            const languageProgress = user.progressTutorial.find(
-                prog => prog.language === tutorial.language
-            );
-            
-            if (!languageProgress) return true; // No progress for this language, tutorial is available
-            
-            const tutorialProgress = languageProgress.tutorials.find(
-                t => t.tutorialName === tutorial.title
-            );
-            
-            // Return true if tutorial is not started or doesn't exist in progress
-            return !tutorialProgress || tutorialProgress.status === 'not started';
-        });
-
-        // Limit to 3 tutorials
-        const limitedTutorials = availableTutorials.slice(0, 3);
-
-        res.status(200).json(limitedTutorials);
+        res.status(200).json(tutorials);
     } catch (error) {
         console.log(error);
         res.status(500).json({ error: "Server error." });
@@ -663,8 +642,7 @@ app.post("/start-tutorial", withAuth, async (req, res) => {
         langEntry.tutorials.push({
             tutorialName,
             startedAt: new Date(),
-            endedAt: null,
-            status: "started"
+            endedAt: null
         });
         await user.save();
     }
@@ -677,33 +655,38 @@ app.post("/end-tutorial", withAuth, async (req, res) => {
         const { tutorialName, tutorialLanguage } = req.body;
         const userEmail = req.user.email;
 
+        // Use $elemMatch to ensure all conditions apply to the same array elements
         const result = await User.findOneAndUpdate(
             {
                 email: userEmail,
+                // Find a document that has an element in 'progressTutorial' that matches...
                 progressTutorial: {
                     $elemMatch: {
                         language: tutorialLanguage,
+                        // ...and within that element, a tutorial that matches these conditions
                         tutorials: {
                             $elemMatch: {
                                 tutorialName: tutorialName,
-                                endedAt: null // Only update if not already ended
+                                endedAt: null // Crucially, check this on the specific tutorial
                             }
                         }
                     }
                 }
             },
             {
+                // The update operation remains the same
                 $set: {
-                    "progressTutorial.$[lang].tutorials.$[tut].endedAt": new Date(),
-                    "progressTutorial.$[lang].tutorials.$[tut].status": "finished"
+                    "progressTutorial.$[lang].tutorials.$[tut].endedAt": new Date()
                 }
             },
             {
+                // Your arrayFilters are mostly correct, but we can make them safer
                 arrayFilters: [
                     { "lang.language": tutorialLanguage },
+                    // Ensure the tutorial we update also matches the endedAt: null condition
                     { "tut.tutorialName": tutorialName, "tut.endedAt": null }
                 ],
-                new: true
+                new: true // This returns the updated document
             }
         );
 
@@ -718,7 +701,6 @@ app.post("/end-tutorial", withAuth, async (req, res) => {
         res.status(500).json({ error: "Server error" });
     }
 });
-
 // Endpoint to execute user's code from coding challenges
 app.post("/execute-code", withAuth, async (req, res) => {
     const { clientId, clientSecret, challengeId, userInput, code, language, versionIndex } = req.body;
@@ -736,7 +718,7 @@ app.post("/execute-code", withAuth, async (req, res) => {
     }
 
     const testResults = await runAllTestCases(clientId, clientSecret, challenge.testCases, userInput, code, language, versionIndex);
-    
+
     // Check if all TEST cases passed (ignore user input results for challenge completion)
     const testCaseResults = testResults.filter(result => result.type === "test");
     const allTestCasesPassed = testCaseResults.every(r => r.passed);
@@ -1414,7 +1396,7 @@ const runAllTestCases = async (clientId, clientSecret, testCases, userInput, cod
             });
 
             const userData = await userRes.json();
-            
+
             results.push({
                 type: "user",
                 input: userInput.trim(),
