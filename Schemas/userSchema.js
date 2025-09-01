@@ -48,7 +48,6 @@ const userSchema = new mongoose.Schema({
             },
             solvedAt: { type: Date, default: Date.now },
             completedAt: { type: Date },
-            code: String,
             difficulty: String
         }
     ],

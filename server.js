@@ -323,10 +323,10 @@ app.post("/exam/results", withAuth, async (req, res) => {
 
         // Save summary in user's solvedExams
         user.solvedExams.push({
-            examId,          
+            examId,
             grade,
             totalQuestions: totalQuestion,
-            questions,       
+            questions,
             correctCount,
             allAnswers: Object.entries(answers).map(([questionId, answer]) => ({
                 questionId,
@@ -704,7 +704,7 @@ app.post("/end-tutorial", withAuth, async (req, res) => {
 
 // Endpoint to execute user's code from coding challenges
 app.post("/execute-code", withAuth, async (req, res) => {
-    const { clientId, clientSecret, challengeId, code, language, versionIndex } = req.body;
+    const { clientId, clientSecret, challengeId, userInput, code, language, versionIndex } = req.body;
     const userEmail = req.user.email;
 
     const user = await User.findOne({ email: userEmail });
@@ -718,12 +718,13 @@ app.post("/execute-code", withAuth, async (req, res) => {
         return res.status(404).json({ error: "Challenge not found!" });
     }
 
-    const testResults = await runAllTestCases(clientId, clientSecret, challenge.testCases, code, language, versionIndex);
-    //console.log("test Results: ", testResults)
+    const testResults = await runAllTestCases(clientId, clientSecret, challenge.testCases, userInput, code, language, versionIndex);
+    
+    // Check if all TEST cases passed (ignore user input results for challenge completion)
+    const testCaseResults = testResults.filter(result => result.type === "test");
+    const allTestCasesPassed = testCaseResults.every(r => r.passed);
 
-    const allPassed = testResults.every(r => r.passed);
-
-    if (allPassed) {
+    if (allTestCasesPassed) {
         const alreadySolved = user.solvedChallenges.some(
             (item) => item.challengeId.toString() === challengeId
         );
@@ -734,12 +735,10 @@ app.post("/execute-code", withAuth, async (req, res) => {
         }
     }
 
-    //console.log(testResults)
-
     return res.status(200).json({
-        success: allPassed,
+        success: allTestCasesPassed,
         testResults,
-        message: allPassed ? "All tests passed!" : "Some tests failed."
+        message: allTestCasesPassed ? "All tests passed!" : "Some tests failed."
     });
 });
 
@@ -852,7 +851,7 @@ app.post("/end-challenge", withAuth, async (req, res) => {
                 $set: {
                     "solvedChallenges.$.status": "completed",
                     "solvedChallenges.$.completedAt": new Date(),
-                    "solvedChallenges.$.code": code,
+                    "solvedChallenges.$.userCode": code,
                     "solvedChallenges.$.difficulty": challenge.difficulty
                 }
             }
@@ -1378,9 +1377,47 @@ function calculateUserProgressLevel(solvedChallenges) {
 }
 
 // Function to run all test cases for a given code snippet
-const runAllTestCases = async (clientId, clientSecret, testCases, code, language, versionIndex) => {
+const runAllTestCases = async (clientId, clientSecret, testCases, userInput, code, language, versionIndex) => {
     const results = [];
 
+    // First, execute user's custom input if provided
+    if (userInput && userInput.trim() !== "") {
+        try {
+            const userRes = await fetch("https://api.jdoodle.com/v1/execute", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    clientId: clientId,
+                    clientSecret: clientSecret,
+                    script: code,
+                    language: language,
+                    versionIndex: versionIndex,
+                    stdin: userInput.trim(),
+                }),
+            });
+
+            const userData = await userRes.json();
+            
+            results.push({
+                type: "user",
+                input: userInput.trim(),
+                expected: "N/A (User Input)",
+                output: userData.output?.trim() || "No output",
+                passed: true, // User input execution always "passes" as it's just for testing
+            });
+
+        } catch (err) {
+            results.push({
+                type: "user",
+                input: userInput.trim(),
+                expected: "N/A (User Input)",
+                output: `Error: ${err.message}`,
+                passed: false,
+            });
+        }
+    }
+
+    // Then execute all test cases
     for (const testCase of testCases) {
         try {
             const res = await fetch("https://api.jdoodle.com/v1/execute", {
@@ -1397,9 +1434,9 @@ const runAllTestCases = async (clientId, clientSecret, testCases, code, language
             });
 
             const data = await res.json();
-            //console.log(data.output)
 
             results.push({
+                type: "test",
                 input: testCase.input,
                 expected: testCase.expectedOutput,
                 output: data.output?.trim() || "No output",
@@ -1407,8 +1444,8 @@ const runAllTestCases = async (clientId, clientSecret, testCases, code, language
             });
 
         } catch (err) {
-            //console.error(err)
             results.push({
+                type: "test",
                 input: testCase.input,
                 expected: testCase.expectedOutput,
                 output: `Error: ${err.message}`,
