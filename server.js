@@ -287,7 +287,7 @@ app.put("/updateuser", withAuth, async (req, res) => {
 
 // Endpoint to receive exam results and save them to the database
 app.post("/exam/results", withAuth, async (req, res) => {
-    const { examId, answers, language, questions, correctCount, totalQuestion } = req.body;
+    const { examId, answers, language, questions, correctCount, totalQuestion, startedAt } = req.body;
     const userID = req.user.id;
     const userEmail = req.user.email;
 
@@ -323,16 +323,17 @@ app.post("/exam/results", withAuth, async (req, res) => {
 
         // Save summary in user's solvedExams
         user.solvedExams.push({
-            examId,          // Link real exam id here
+            examId,          
             grade,
             totalQuestions: totalQuestion,
-            questions,       // optional, you might want to remove to save space if you have examId
+            questions,       
             correctCount,
             allAnswers: Object.entries(answers).map(([questionId, answer]) => ({
                 questionId,
                 answer
             })),
-            submittedAt: new Date()
+            submittedAt: new Date(),
+            startedAt
         });
 
         user.progressTutorial = user.progressTutorial.filter(item => item.language);
@@ -430,14 +431,17 @@ app.get("/exam/answers/:examId", withAuth, async (req, res) => {
 
         if (!user) return res.status(404).json({ error: "User not found" });
 
-        // Намираме solvedExam за дадения examId
-        const solvedExam = user.solvedExams.find(
-            se => se.examId && se.examId._id.toString() === examId
-        );
+        // Find ALL solved exams for this examId and sort by submission date (newest first)
+        const solvedExams = user.solvedExams
+            .filter(se => se.examId && se.examId._id.toString() === examId)
+            .sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
 
-        if (!solvedExam) {
+        if (solvedExams.length === 0) {
             return res.status(404).json({ error: "No solved exam found for this examId" });
         }
+
+        // Get the most recent solved exam
+        const solvedExam = solvedExams[0];
 
         const exam = solvedExam.examId;
         if (!exam || !Array.isArray(exam.questions)) {
@@ -467,7 +471,7 @@ app.get("/exam/answers/:examId", withAuth, async (req, res) => {
                 options: q.options,
                 correctAnswers: q.correctAnswers,
                 userAnswer,
-                isCorrect
+                isCorrect,
             };
         });
 
@@ -484,12 +488,14 @@ app.get("/exam/answers/:examId", withAuth, async (req, res) => {
             difficulty: exam.difficulty,
             time: exam.time,
             createdAt: exam.createdAt,
+            startedAt: solvedExam.startedAt,
             solvedAt: solvedExam.submittedAt,
             totalQuestions,
             correctCount,
             wrongCount,
             grade,
-            questions: questionsWithUserAnswers
+            questions: questionsWithUserAnswers,
+            userAnswersMap
         });
 
     } catch (err) {

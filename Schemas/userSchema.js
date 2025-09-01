@@ -69,6 +69,7 @@ const userSchema = new mongoose.Schema({
                     answer: [String]
                 }
             ],
+            startedAt: { type: Date, default: Date.now },
             submittedAt: { type: Date, default: Date.now }
         }
     ],
