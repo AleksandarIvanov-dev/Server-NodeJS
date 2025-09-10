@@ -28,7 +28,7 @@ const challenges = [
         description: "Напишете програма, която проверява дали дадено цяло число е четно.",
         starterCode: `def is_even(num):
     # Върнете True ако num е четно, иначе False
-    pass
+    return
 
 num = int(input())
 print(str(is_even(num)).lower())`,
@@ -47,7 +47,7 @@ print(str(is_even(num)).lower())`,
         description: "Напишете програма, която чете две цели числа и извежда тяхната сума.",
         starterCode: `def sum_two_numbers(a, b):
     # Върнете сумата на a и b
-    pass
+    return
 
 a, b = map(int, input().split())
 print(sum_two_numbers(a, b))`,
@@ -66,7 +66,7 @@ print(sum_two_numbers(a, b))`,
         description: "Напишете програма, която намира лицето на правоъгълник по зададени дължина и ширина.",
         starterCode: `def rectangle_area(length, width):
     # Върнете лицето на правоъгълника
-    pass
+    return
 
 l, w = map(int, input().split())
 print(rectangle_area(l, w))`,
@@ -85,7 +85,7 @@ print(rectangle_area(l, w))`,
         description: "Напишете програма, която превръща температура от Целзий във Фаренхайт.",
         starterCode: `def celsius_to_fahrenheit(c):
     # Формула: F = C * 9/5 + 32
-    pass
+    return
 
 c = float(input())
 print(celsius_to_fahrenheit(c))`,
@@ -104,7 +104,7 @@ print(celsius_to_fahrenheit(c))`,
         description: "Напишете програма, която обръща реда на символите в даден низ.",
         starterCode: `def reverse_string(s):
     # Върнете низа в обратен ред
-    pass
+    return
 
 s = input()
 print(reverse_string(s))`,
@@ -123,7 +123,7 @@ print(reverse_string(s))`,
         description: "Напишете програма, която намира факториела на дадено цяло число n.",
         starterCode: `def factorial(n):
     # Върнете факториела на n (n!)
-    pass
+    return
 
 n = int(input())
 print(factorial(n))`,
@@ -142,7 +142,7 @@ print(factorial(n))`,
         description: "Напишете програма, която намира сумата на всички цифри на дадено цяло число.",
         starterCode: `def sum_of_digits(num):
     # Върнете сумата на цифрите на num
-    pass
+    return
 
 n = int(input())
 print(sum_of_digits(n))`,
@@ -161,7 +161,7 @@ print(sum_of_digits(n))`,
         description: "Напишете програма, която брои колко гласни има в даден низ.",
         starterCode: `def count_vowels(s):
     # Бройте колко гласни (a, e, i, o, u) има в низа
-    pass
+    return
 
 s = input()
 print(count_vowels(s))`,
@@ -180,7 +180,7 @@ print(count_vowels(s))`,
         description: "Напишете програма, която проверява дали даден низ е палиндром (чете се еднакво отляво надясно и отдясно наляво).",
         starterCode: `def is_palindrome(s):
     # Върнете True ако s е палиндром, иначе False
-    pass
+    return
 
 s = input()
 print(str(is_palindrome(s)).lower())`,
@@ -199,7 +199,7 @@ print(str(is_palindrome(s)).lower())`,
         description: "Напишете програма, която намира най-дългата дума в дадено изречение.",
         starterCode: `def longest_word(sentence):
     # Върнете най-дългата дума в изречението
-    pass
+    return
 
 sentence = input()
 print(longest_word(sentence))`,
@@ -218,7 +218,7 @@ print(longest_word(sentence))`,
         description: "Напишете програма, която сортира списък от числа във възходящ ред.",
         starterCode: `def sort_numbers(numbers):
     # Върнете списъка подреден във възходящ ред
-    pass
+    return
 
 nums = list(map(int, input().split()))
 print(' '.join(map(str, sort_numbers(nums))))`,
@@ -239,7 +239,7 @@ print(' '.join(map(str, sort_numbers(nums))))`,
 
 def all_permutations(s):
     # Върнете списък с всички пермутации на символите в низа
-    pass
+    return
 
 s = input()
 print(' '.join(all_permutations(s)))`,
