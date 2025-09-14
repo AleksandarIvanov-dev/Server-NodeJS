@@ -1119,7 +1119,7 @@ app.post("/get-tutorials", withAuth, async (req, res) => {
 
         const tutorials = await Tutorial.find({
             language: { $in: user.languages }
-        }).sort({ title: 1 });
+        })
 
         res.status(200).json(tutorials);
     } catch (error) {

@@ -161,21 +161,27 @@ const tutorials = [
         text: "Ще разберете как да повтаряте операции с помощта на цикли – for, while, do-while – и кога да използвате всеки вид.",
         link: "/tutorials/java/cycles",
         language: "Java"
-    },
-    {
-        title: "Методи в Java",
-        image: "http://localhost:5000/Images/Java/Java-Methods.jpg",
-        text: "Ще научите какво представляват методите в Java, как се дефинират и извикват, и защо са важни за модулното програмиране.",
-        link: "/tutorials/java/func",
-        language: "Java"
-    },
-    {
+    }, {
         title: "Масиви в Java",
         image: "http://localhost:5000/Images/Java/Java-Arrays.jpg",
         text: "Ще се запознаете с масивите в Java – как да ги създавате, обхождате и използвате за съхранение на множество стойности.",
         link: "/tutorials/java/arrays",
         language: "Java"
-    }
+    }, {
+        title: "Java Maps",
+        image: "http://localhost:5000/Images/Java/Java-Arrays.jpg",
+        text: "Ще се запознаете с Maps и видовете Maps в Java – как да ги създавате, обхождате и използвате за съхранение на множество стойности.",
+        link: "/tutorials/java/maps",
+        language: "Java"
+    },
+    {
+        title: "Методи в Java",
+        image: "http://localhost:5000/Images/Java/Java-Maps.jpeg",
+        text: "Ще научите какво представляват методите в Java, как се дефинират и извикват, и защо са важни за модулното програмиране.",
+        link: "/tutorials/java/func",
+        language: "Java"
+    },
+
 
     // JavaScript Tutorials
 ];
