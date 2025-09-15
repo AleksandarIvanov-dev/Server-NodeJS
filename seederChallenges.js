@@ -256,7 +256,7 @@ print(' '.join(all_permutations(s)))`,
     {
         title: "Обърни низ",
         description: "Въведете низ и го обърнете обратно. Изведете получения низ.",
-        starterCod: `import java.util.*;\npublic class Main {\n    public static void main(String[] args) {\n        // Вашият код тук\n    }\n}`,
+        starterCode: `import java.util.*;\npublic class Main {\n    public static void main(String[] args) {\n        // Вашият код тук\n    }\n}`,
         language: "java",
         languageForDisplay: "Java",
         sampleInput: "hello",
