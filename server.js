@@ -743,7 +743,7 @@ app.post("/execute-code", withAuth, async (req, res) => {
 
     if (allTestCasesPassed) {
         const alreadySolved = user.solvedChallenges.some(
-            (item) => item.challengeId.toString() === challengeId
+            (item) => item.challengeId == challengeId
         );
 
         if (!alreadySolved) {

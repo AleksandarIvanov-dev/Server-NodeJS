@@ -6,7 +6,7 @@ const challenges = [
     {
         title: "Пирамида от звезди",
         description: "Напишете програма, която принтира пирамида от звездички с дадена височина.",
-        starterCode: "# Вашият код тук",
+        starterCode: `height = int(input())\n\n`,
         language: "python3",
         languageForDisplay: "Python",
         sampleInput: "4",
@@ -256,7 +256,7 @@ print(' '.join(all_permutations(s)))`,
     {
         title: "Обърни низ",
         description: "Въведете низ и го обърнете обратно. Изведете получения низ.",
-        starterCode: `import java.util.*;\npublic class Main {\n    public static void main(String[] args) {\n        // Вашият код тук\n    }\n}`,
+        starterCode: `import java.util.*;\npublic class Main {\n    // Вашият код тук\n    }\n}`,
         language: "java",
         languageForDisplay: "Java",
         sampleInput: "hello",
