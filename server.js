@@ -605,9 +605,26 @@ app.post("/get-tutorial", withAuth, async (req, res) => {
             return res.status(400).json({ error: "User not found." });
         }
 
-        const tutorials = await Tutorial.find({
-            language: { $in: user.languages }
-        }).sort({ title: 1 }).limit(3);
+        // Collect tutorial NAMES that are NOT finished (in progress or not started)
+        const notFinishedTutorialNames = user.progressTutorial
+            .flatMap(pt => pt.tutorials
+                .filter(t => t.status !== "finished")
+                .map(t => t.tutorialName)
+            );
+
+        let tutorials = [];
+
+        // If there are no unfinished tutorials, return first 3 tutorials from DB
+        if (notFinishedTutorialNames.length === 0) {
+            tutorials = await Tutorial.find({})
+                .limit(3);
+        } else {
+            // Find tutorials that match the unfinished tutorial names
+            tutorials = await Tutorial.find({
+                title: { $in: notFinishedTutorialNames }
+            })
+                .limit(3);
+        }
 
         res.status(200).json(tutorials);
     } catch (error) {
@@ -676,7 +693,8 @@ app.post("/end-tutorial", withAuth, async (req, res) => {
             {
                 // The update operation remains the same
                 $set: {
-                    "progressTutorial.$[lang].tutorials.$[tut].endedAt": new Date()
+                    "progressTutorial.$[lang].tutorials.$[tut].endedAt": new Date(),
+                    "progressTutorial.$[lang].tutorials.$[tut].status": "finished"
                 }
             },
             {

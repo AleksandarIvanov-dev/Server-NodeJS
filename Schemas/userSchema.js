@@ -88,7 +88,7 @@ const userSchema = new mongoose.Schema({
     ],
     progressTutorial: [
         {
-            language: { type: String, required: true },
+            language: { type: String},
             tutorials: [
                 {
                     tutorialName: { type: String, required: true },
