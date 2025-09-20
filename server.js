@@ -659,7 +659,8 @@ app.post("/start-tutorial", withAuth, async (req, res) => {
         langEntry.tutorials.push({
             tutorialName,
             startedAt: new Date(),
-            endedAt: null
+            endedAt: null,
+            status: "started"
         });
         await user.save();
     }
